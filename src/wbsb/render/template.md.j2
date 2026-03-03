@@ -1,0 +1,56 @@
+# Weekly Business Signal Brief
+**Run ID:** {{ findings.run.run_id }}
+**Generated:** {{ findings.run.generated_at.strftime('%Y-%m-%d %H:%M UTC') }}
+**Period:** Week of {{ findings.periods.current_week_start }} → {{ findings.periods.current_week_end }}
+**vs. Prior Week:** {{ findings.periods.previous_week_start }} → {{ findings.periods.previous_week_end }}
+
+---
+
+## Signals ({{ findings.signals | length }})
+
+{% if findings.signals %}
+{% for signal in findings.signals %}
+### {{ signal.severity }} — {{ signal.metric_id }} (Rule {{ signal.rule_id }})
+
+{{ signal.explanation }}
+
+**Evidence:**
+- Current: {{ signal.evidence.current }}
+- Previous: {{ signal.evidence.previous }}
+- Δ absolute: {{ signal.evidence.delta_abs }}
+- Δ %: {% if signal.evidence.delta_pct is not none %}{{ "%.1f"|format(signal.evidence.delta_pct * 100) }}%{% else %}N/A{% endif %}
+
+{% if signal.guardrails %}
+**Guardrails:** {{ signal.guardrails | join('; ') }}
+{% endif %}
+{% if signal.reliability == "low" %}
+> ⚠️ Low-reliability signal: previous period data below minimum threshold.
+{% endif %}
+
+---
+{% endfor %}
+{% else %}
+No signals fired this week. All metrics within thresholds.
+
+---
+{% endif %}
+
+## Key Metrics
+
+| Metric | Current | Previous | Δ % |
+|--------|---------|----------|-----|
+{% for m in findings.metrics %}| {{ m.name }} | {% if m.current is not none %}{{ "%.4g"|format(m.current) }}{% else %}N/A{% endif %} | {% if m.previous is not none %}{{ "%.4g"|format(m.previous) }}{% else %}N/A{% endif %} | {% if m.delta_pct is not none %}{{ "%.1f"|format(m.delta_pct * 100) }}%{% else %}N/A{% endif %} |
+{% endfor %}
+
+---
+
+## Audit
+
+{% for event in findings.audit %}
+- **{{ event.event_type }}**: {{ event.message }}
+{% endfor %}
+
+---
+*Input: {{ findings.run.input_file }} (sha256: {{ findings.run.input_sha256[:12] }}...)*
+*Config: {{ findings.run.config_sha256[:12] }}...*
+{% if findings.run.git_commit %}*Git: {{ findings.run.git_commit[:8] }}*{% endif %}
