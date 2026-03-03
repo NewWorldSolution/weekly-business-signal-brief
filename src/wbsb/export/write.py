@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from wbsb.domain.models import Findings, Manifest
+from wbsb.observability.logging import get_logger
 from wbsb.utils.hash import file_sha256
 
 
@@ -39,28 +40,33 @@ def write_artifacts(
     brief_path = run_dir / "brief.md"
     manifest_path = run_dir / "manifest.json"
 
-    # Write findings.json
-    findings_json = findings.model_dump_json(indent=2)
-    findings_path.write_text(findings_json, encoding="utf-8")
+    try:
+        # Write findings.json
+        findings_json = findings.model_dump_json(indent=2)
+        findings_path.write_text(findings_json, encoding="utf-8")
 
-    # Write brief.md
-    brief_path.write_text(brief_md, encoding="utf-8")
+        # Write brief.md
+        brief_path.write_text(brief_md, encoding="utf-8")
 
-    # Compute artifact hashes
-    findings_hash = file_sha256(findings_path)
-    brief_hash = file_sha256(brief_path)
+        # Compute artifact hashes
+        findings_hash = file_sha256(findings_path)
+        brief_hash = file_sha256(brief_path)
 
-    # Write manifest.json
-    manifest = Manifest(
-        run_id=run_id,
-        generated_at=datetime.now(UTC),
-        input_file=input_path.name,
-        input_sha256=input_hash,
-        config_sha256=config_hash,
-        elapsed_seconds=round(elapsed_seconds, 3),
-        artifacts={
-            "findings.json": findings_hash,
-            "brief.md": brief_hash,
-        },
-    )
-    manifest_path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
+        # Write manifest.json
+        manifest = Manifest(
+            run_id=run_id,
+            generated_at=datetime.now(UTC),
+            input_file=input_path.name,
+            input_sha256=input_hash,
+            config_sha256=config_hash,
+            elapsed_seconds=round(elapsed_seconds, 3),
+            artifacts={
+                "findings.json": findings_hash,
+                "brief.md": brief_hash,
+            },
+        )
+        manifest_path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
+
+    except Exception as exc:
+        get_logger().error("write_artifacts.failed", error=str(exc), exc_info=True)
+        raise
