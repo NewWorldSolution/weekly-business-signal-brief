@@ -1,15 +1,15 @@
 """Deterministic rules engine - evaluates config-driven rules against metrics."""
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from wbsb.domain.models import RunConfig, Signal
 
 
 def evaluate_rules(
-    current_metrics: dict[str, Optional[float]],
-    previous_metrics: dict[str, Optional[float]],
-    deltas: dict[str, tuple[Optional[float], Optional[float]]],
+    current_metrics: dict[str, float | None],
+    previous_metrics: dict[str, float | None],
+    deltas: dict[str, tuple[float | None, float | None]],
     raw_config: dict[str, Any],
     run_config: RunConfig,
     reliability: str,

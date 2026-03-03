@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Optional
 
 import pandas as pd
 
@@ -13,7 +12,7 @@ def week_end_date(week_start: date) -> date:
 
 
 def resolve_target_week(
-    df: pd.DataFrame, target_week: Optional[str]
+    df: pd.DataFrame, target_week: str | None
 ) -> tuple[date, date]:
     """Resolve current and previous week start dates.
 

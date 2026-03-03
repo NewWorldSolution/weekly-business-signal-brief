@@ -1,12 +1,12 @@
 """Deterministic metric calculation from a single-week row."""
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from wbsb.utils.hash import safe_div
 
 
-def compute_metrics(row: dict[str, Any]) -> dict[str, Optional[float]]:
+def compute_metrics(row: dict[str, Any]) -> dict[str, float | None]:
     """Compute all metrics from a single week data row.
 
     Args:

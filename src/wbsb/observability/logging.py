@@ -4,10 +4,9 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
-
 
 # Reserved LogRecord attributes that cannot be used as extra keys
 _RESERVED_LOG_KEYS = frozenset({
@@ -29,7 +28,7 @@ class JsonlHandler(logging.Handler):
 
     def emit(self, record: logging.LogRecord) -> None:
         entry: dict[str, Any] = {
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "event": record.getMessage(),
         }

@@ -1,7 +1,7 @@
 """Build the Findings document from computed metrics and signals."""
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -21,8 +21,7 @@ from wbsb.metrics.calculate import compute_metrics
 from wbsb.metrics.registry import METRIC_REGISTRY_BY_ID
 from wbsb.rules.engine import evaluate_rules
 from wbsb.utils.dates import week_end_date
-from wbsb.utils.hash import git_commit_hash
-from wbsb.utils.hash import tool_versions
+from wbsb.utils.hash import git_commit_hash, tool_versions
 
 
 def build_findings(
@@ -108,7 +107,7 @@ def build_findings(
 
     run_meta = RunMeta(
         run_id=run_id,
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
         input_file=input_path.name,
         input_sha256=input_hash,
         config_sha256=config_hash,

@@ -1,8 +1,7 @@
 """Write run artifacts to disk."""
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from wbsb.domain.models import Findings, Manifest
@@ -54,7 +53,7 @@ def write_artifacts(
     # Write manifest.json
     manifest = Manifest(
         run_id=run_id,
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
         input_file=input_path.name,
         input_sha256=input_hash,
         config_sha256=config_hash,

@@ -1,14 +1,12 @@
 """Compute deltas between current and previous week metrics."""
 from __future__ import annotations
 
-from typing import Optional
-
 from wbsb.utils.hash import safe_div
 
 
 def compute_delta(
-    current: Optional[float], previous: Optional[float]
-) -> tuple[Optional[float], Optional[float]]:
+    current: float | None, previous: float | None
+) -> tuple[float | None, float | None]:
     """Compute absolute and percentage delta.
 
     Args:

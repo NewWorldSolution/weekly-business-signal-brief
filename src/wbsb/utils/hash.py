@@ -6,7 +6,7 @@ import importlib.metadata
 import json
 import subprocess
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 
 def file_sha256(path: Path) -> str:
@@ -24,7 +24,7 @@ def yaml_sha256(data: Any) -> str:
     return hashlib.sha256(serialised).hexdigest()
 
 
-def git_commit_hash() -> Optional[str]:
+def git_commit_hash() -> str | None:
     """Return current git commit hash, or None if not in a git repo."""
     try:
         result = subprocess.run(
@@ -52,7 +52,7 @@ def tool_versions() -> dict[str, str]:
     return versions
 
 
-def safe_div(numerator: Optional[float], denominator: Optional[float]) -> Optional[float]:
+def safe_div(numerator: float | None, denominator: float | None) -> float | None:
     """Safe division returning None on zero denominator or None inputs."""
     if numerator is None or denominator is None:
         return None

@@ -5,7 +5,6 @@ import pytest
 
 from wbsb.metrics.calculate import compute_metrics
 
-
 SAMPLE_ROW = {
     "ad_spend_total": 2100.0,
     "leads_paid": 28.0,

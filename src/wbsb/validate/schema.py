@@ -71,7 +71,10 @@ def validate_dataframe(df: pd.DataFrame) -> tuple[list[AuditEvent], pd.DataFrame
             events.append(
                 AuditEvent(
                     event_type="coerce_warning",
-                    message=f"Column '{col}' had {new_nulls - original_nulls} non-numeric values coerced to NaN",
+                    message=(
+                        f"Column '{col}' had {new_nulls - original_nulls}"
+                        " non-numeric values coerced to NaN"
+                    ),
                     column=col,
                 )
             )
@@ -84,7 +87,10 @@ def validate_dataframe(df: pd.DataFrame) -> tuple[list[AuditEvent], pd.DataFrame
             events.append(
                 AuditEvent(
                     event_type="coerce_warning",
-                    message=f"Column '{col}' had {new_nulls - original_nulls} non-numeric values coerced to NaN",
+                    message=(
+                        f"Column '{col}' had {new_nulls - original_nulls}"
+                        " non-numeric values coerced to NaN"
+                    ),
                     column=col,
                 )
             )

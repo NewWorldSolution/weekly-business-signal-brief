@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import sys
 import time
+from datetime import UTC
 from pathlib import Path
 
 from wbsb.domain.models import RunConfig
@@ -26,15 +27,15 @@ def execute(
 ) -> int:
     """Execute the full pipeline and return exit code (0=success, 1=error)."""
     import uuid
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     import yaml
 
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "_" + uuid.uuid4().hex[:6]
+    run_id = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "_" + uuid.uuid4().hex[:6]
     run_dir = output_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    logger = init_run_logger(run_dir / "logs.jsonl")
+    init_run_logger(run_dir / "logs.jsonl")
     log = get_logger()
 
     log.info("pipeline.start", run_id=run_id, input=str(input_path), llm_mode=llm_mode)
@@ -81,7 +82,11 @@ def execute(
             run_config=run_config,
             audit_events=audit_events,
         )
-        log.info("findings.build.done", signals=len(findings.signals), metrics=len(findings.metrics))
+        log.info(
+            "findings.build.done",
+            signals=len(findings.signals),
+            metrics=len(findings.metrics),
+        )
 
         # Render brief
         if llm_mode == "off":

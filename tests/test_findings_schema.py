@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 from pydantic import ValidationError
@@ -21,7 +21,7 @@ from wbsb.domain.models import (
 def make_run_meta() -> RunMeta:
     return RunMeta(
         run_id="test-run-001",
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
         input_file="sample.csv",
         input_sha256="abc123",
         config_sha256="def456",
@@ -105,7 +105,7 @@ def test_signal_requires_rule_id():
 def test_manifest_valid():
     m = Manifest(
         run_id="test-run-001",
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
         input_file="sample.csv",
         input_sha256="abc123",
         config_sha256="def456",

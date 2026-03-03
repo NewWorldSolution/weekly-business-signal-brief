@@ -10,4 +10,4 @@ lint:
 	ruff check src/ tests/
 
 run-sample:
-	wbsb --input examples/sample_weekly.csv --output runs --llm off
+	python -m wbsb.cli run --input examples/sample_weekly.csv --output runs --llm off

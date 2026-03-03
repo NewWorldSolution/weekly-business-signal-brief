@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -12,8 +12,8 @@ class AuditEvent(BaseModel):
 
     event_type: str
     message: str
-    column: Optional[str] = None
-    extra: Optional[dict[str, Any]] = None
+    column: str | None = None
+    extra: dict[str, Any] | None = None
 
 
 class RunConfig(BaseModel):
@@ -29,10 +29,10 @@ class MetricResult(BaseModel):
     id: str
     name: str
     unit: str
-    current: Optional[float] = None
-    previous: Optional[float] = None
-    delta_abs: Optional[float] = None
-    delta_pct: Optional[float] = None
+    current: float | None = None
+    previous: float | None = None
+    delta_abs: float | None = None
+    delta_pct: float | None = None
     reliability: str = "ok"  # ok | low
 
 
@@ -65,7 +65,7 @@ class RunMeta(BaseModel):
     input_file: str
     input_sha256: str
     config_sha256: str
-    git_commit: Optional[str] = None
+    git_commit: str | None = None
     tool_versions: dict[str, str] = Field(default_factory=dict)
 
 
@@ -88,6 +88,6 @@ class Manifest(BaseModel):
     input_file: str
     input_sha256: str
     config_sha256: str
-    git_commit: Optional[str] = None
+    git_commit: str | None = None
     elapsed_seconds: float
     artifacts: dict[str, str] = Field(default_factory=dict)
