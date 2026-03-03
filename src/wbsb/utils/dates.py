@@ -56,10 +56,8 @@ def resolve_target_week(
 
 def _parse_iso_week(iso_week: str) -> date:
     """Parse ISO week string (YYYY-Www) to the Monday date."""
-    import datetime
-
     # Accepts "2024-W47" or "2024-W47-1"
     parts = iso_week.split("-")
     year = int(parts[0])
     week = int(parts[1].lstrip("W"))
-    return datetime.date.fromisocalendar(year, week, 1)
+    return date.fromisocalendar(year, week, 1)
