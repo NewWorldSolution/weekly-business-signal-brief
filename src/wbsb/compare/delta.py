@@ -1,7 +1,7 @@
 """Compute deltas between current and previous week metrics."""
 from __future__ import annotations
 
-from wbsb.utils.hash import safe_div
+from wbsb.utils.math import safe_div
 
 
 def compute_delta(

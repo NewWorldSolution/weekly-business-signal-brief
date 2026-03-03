@@ -133,8 +133,18 @@ def build_findings(
 
 def _get_row(df: pd.DataFrame, week_start: date) -> dict[str, Any]:
     """Extract a single row as a dict."""
+    if df.empty:
+        raise ValueError(
+            "Dataset contains no weeks. Cannot process the requested week."
+        )
     mask = df["week_start_date"] == pd.Timestamp(week_start)
     rows = df[mask]
     if rows.empty:
-        return {}
+        min_week = df["week_start_date"].min().date()
+        max_week = df["week_start_date"].max().date()
+        raise ValueError(
+            f"Week '{week_start}' not found in dataset. "
+            f"Available weeks range from '{min_week}' to '{max_week}'. "
+            f"Verify the --week argument or check dataset completeness."
+        )
     return rows.iloc[0].to_dict()

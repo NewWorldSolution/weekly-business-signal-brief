@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from wbsb.utils.hash import safe_div
+from wbsb.utils.math import safe_div
 
 
 def compute_metrics(row: dict[str, Any]) -> dict[str, float | None]:

@@ -25,6 +25,7 @@ class JsonlHandler(logging.Handler):
         super().__init__()
         self._path = path
         self._formatter = logging.Formatter()
+        self._write_failed = False
 
     def emit(self, record: logging.LogRecord) -> None:
         entry: dict[str, Any] = {
@@ -41,8 +42,14 @@ class JsonlHandler(logging.Handler):
         try:
             with open(self._path, "a", encoding="utf-8") as f:
                 f.write(json.dumps(entry, default=str) + "\n")
-        except Exception:
-            pass
+        except Exception as exc:
+            if not self._write_failed:
+                self._write_failed = True
+                print(
+                    f"[wbsb] WARNING: JSONL log write failed ({exc}); "
+                    "further write errors will be suppressed.",
+                    file=sys.stderr,
+                )
 
 
 _logger: logging.Logger | None = None

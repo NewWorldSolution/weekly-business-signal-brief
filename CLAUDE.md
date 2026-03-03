@@ -117,3 +117,40 @@ Rules are fully config-driven via `config/rules.yaml`. No hardcoded thresholds i
 - Tests: passing
 - Ruff: clean
 - GitHub Actions: configured (CI + Claude PR assistant)
+
+---
+
+## Execution Discipline (Non-Negotiable)
+
+- Work is executed one task at a time (one task per PR unless explicitly approved).
+- Use Plan Mode for any change that touches multiple files or changes behavior.
+- Before editing: confirm which files will be modified.
+- Only modify files explicitly allowed by the current task (see TASKS.md or the user prompt).
+- If additional files seem necessary, STOP and ask before changing them.
+- After implementing: run `pytest` and `ruff check .` and report results.
+
+## Determinism & Stability Rules
+
+- Do not introduce randomness (unless seeded and explicitly approved).
+- Preserve stable ordering:
+  - Signals must be sorted by `rule_id`.
+  - Metrics must be emitted in a stable, deterministic order.
+- “Current time” and run IDs may exist only in RunMeta/Manifest; they must not affect computed metrics or rule firing.
+
+## Error Handling Policy
+
+- Never use `except: pass`.
+- Do not silently return empty structures for missing required data.
+- For user-input/data issues: raise clear exceptions (ValueError) with actionable messages.
+- For IO failures (export/logging): log and raise; never pretend success.
+
+## Repo Workflow Conventions
+
+- Avoid unrelated refactors or formatting-only changes unless requested.
+- When changing behavior: add/adjust tests to cover the new behavior.
+- Keep commits small and descriptive; do not mix unrelated changes.
+
+## Task Source of Truth
+
+- TASKS.md defines the current iteration tasks and allowed-file boundaries.
+- CLAUDE.md defines permanent architecture and working rules.

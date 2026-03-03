@@ -94,6 +94,23 @@ def validate_dataframe(df: pd.DataFrame) -> tuple[list[AuditEvent], pd.DataFrame
                     column=col,
                 )
             )
+        # Detect numeric-but-non-integer values
+        numeric_vals = df[col].dropna()
+        non_int_mask = numeric_vals % 1 != 0
+        if non_int_mask.any():
+            count = int(non_int_mask.sum())
+            sample = numeric_vals[non_int_mask].iloc[0]
+            events.append(
+                AuditEvent(
+                    event_type="non_integer_value",
+                    message=(
+                        f"Column '{col}' has {count} non-integer numeric value(s);"
+                        f" e.g. {sample}"
+                    ),
+                    column=col,
+                    extra={"count": count},
+                )
+            )
 
     # Add derived columns
     df["ad_spend_total"] = df["ad_spend_google"] + df["ad_spend_meta"] + df["ad_spend_other"]
