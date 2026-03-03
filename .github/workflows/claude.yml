@@ -1,0 +1,16 @@
+name: Claude Code
+
+on:
+  pull_request:
+  issues:
+  issue_comment:
+
+jobs:
+  claude:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@main
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
