@@ -104,7 +104,8 @@ def evaluate_rules(
         elif condition == "hybrid_delta_pct_lte":
             threshold_pct = rule["threshold_pct"]
             threshold_abs = rule["threshold_abs"]
-            prev_raw = previous_metrics.get(metric_id) or 0.0
+            volume_metric_id = rule.get("volume_metric", metric_id)
+            prev_raw = previous_metrics.get(volume_metric_id) or 0.0
             if prev_raw < volume_threshold:
                 # Use absolute threshold
                 if delta_abs is not None and delta_abs <= threshold_abs:

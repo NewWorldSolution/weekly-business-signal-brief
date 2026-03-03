@@ -153,3 +153,61 @@ def test_low_reliability_skips_min_prev_rule():
     signals = evaluate_rules(curr, prev, deltas, BASE_CONFIG, RUN_CONFIG, "low")
     rule_ids = [s.rule_id for s in signals]
     assert "A1" not in rule_ids  # Requires min prev net revenue, should be skipped
+
+
+# Config with volume_metric pointing to a DIFFERENT metric than metric_id
+VOLUME_METRIC_CROSS_CONFIG = {
+    "defaults": {"min_prev_net_revenue": 3000, "volume_threshold": 5},
+    "rules": [
+        {
+            "id": "X1",
+            "metric_id": "show_rate",
+            "severity": "WARN",
+            "condition": "hybrid_delta_pct_lte",
+            "threshold_pct": -0.20,
+            "threshold_abs": -3,
+            "volume_metric": "bookings_total",  # Different from metric_id
+        },
+    ],
+}
+
+
+def test_hybrid_volume_metric_low_volume_abs_fires():
+    """volume_metric (bookings_total) < threshold → absolute mode → fires."""
+    curr = {"net_revenue": 5000.0, "show_rate": 6.0, "bookings_total": 1.0}
+    prev = {"net_revenue": 5000.0, "show_rate": 10.0, "bookings_total": 4.0}  # 4 < 5
+    deltas = {"show_rate": (-4.0, -0.40), "bookings_total": (-3.0, -0.75)}
+    signals = evaluate_rules(curr, prev, deltas, VOLUME_METRIC_CROSS_CONFIG, RUN_CONFIG, "ok")
+    assert "X1" in [s.rule_id for s in signals]
+
+
+def test_hybrid_volume_metric_high_volume_pct_fires():
+    """volume_metric (bookings_total) >= threshold → pct mode → fires."""
+    curr = {"net_revenue": 5000.0, "show_rate": 7.0, "bookings_total": 50.0}
+    prev = {"net_revenue": 5000.0, "show_rate": 10.0, "bookings_total": 50.0}  # 50 >= 5
+    deltas = {"show_rate": (-3.0, -0.30), "bookings_total": (0.0, 0.0)}
+    signals = evaluate_rules(curr, prev, deltas, VOLUME_METRIC_CROSS_CONFIG, RUN_CONFIG, "ok")
+    assert "X1" in [s.rule_id for s in signals]
+
+
+def test_hybrid_no_volume_metric_fallback_fires():
+    """Rule without volume_metric falls back to metric_id for volume check."""
+    config_no_volume_metric = {
+        "defaults": {"min_prev_net_revenue": 3000, "volume_threshold": 5},
+        "rules": [
+            {
+                "id": "Y1",
+                "metric_id": "bookings_total",
+                "severity": "WARN",
+                "condition": "hybrid_delta_pct_lte",
+                "threshold_pct": -0.20,
+                "threshold_abs": -3,
+                # No volume_metric key at all
+            },
+        ],
+    }
+    curr = {"net_revenue": 5000.0, "bookings_total": 1.0}
+    prev = {"net_revenue": 5000.0, "bookings_total": 4.0}  # 4 < 5
+    deltas = {"bookings_total": (-3.0, -0.75)}
+    signals = evaluate_rules(curr, prev, deltas, config_no_volume_metric, RUN_CONFIG, "ok")
+    assert "Y1" in [s.rule_id for s in signals]
