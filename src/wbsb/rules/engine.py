@@ -75,6 +75,7 @@ def evaluate_rules(
 
         if condition == "delta_pct_lte":
             threshold = rule["threshold"]
+            evidence["threshold"] = threshold
             if delta_pct is not None and delta_pct <= threshold:
                 fired_flag = True
                 explanation = (
@@ -82,6 +83,7 @@ def evaluate_rules(
                 )
         elif condition == "delta_pct_gte":
             threshold = rule["threshold"]
+            evidence["threshold"] = threshold
             if delta_pct is not None and delta_pct >= threshold:
                 fired_flag = True
                 explanation = (
@@ -89,6 +91,7 @@ def evaluate_rules(
                 )
         elif condition == "absolute_lt":
             threshold = rule["threshold"]
+            evidence["threshold"] = threshold
             if current_val is not None and current_val < threshold:
                 fired_flag = True
                 explanation = (
@@ -96,6 +99,7 @@ def evaluate_rules(
                 )
         elif condition == "absolute_gt":
             threshold = rule["threshold"]
+            evidence["threshold"] = threshold
             if current_val is not None and current_val > threshold:
                 fired_flag = True
                 explanation = (
@@ -104,6 +108,8 @@ def evaluate_rules(
         elif condition == "hybrid_delta_pct_lte":
             threshold_pct = rule["threshold_pct"]
             threshold_abs = rule["threshold_abs"]
+            evidence["threshold_pct"] = threshold_pct
+            evidence["threshold_abs"] = threshold_abs
             volume_metric_id = rule.get("volume_metric", metric_id)
             prev_raw = previous_metrics.get(volume_metric_id) or 0.0
             if prev_raw < volume_threshold:
@@ -131,6 +137,9 @@ def evaluate_rules(
                     rule_id=rule_id,
                     severity=severity,
                     metric_id=metric_id,
+                    label=rule.get("label", ""),
+                    category=rule.get("category", ""),
+                    priority=rule.get("priority", 0),
                     explanation=explanation,
                     evidence=evidence,
                     guardrails=guardrails,
@@ -138,4 +147,4 @@ def evaluate_rules(
                 )
             )
 
-    return sorted(fired, key=lambda s: s.rule_id)
+    return sorted(fired, key=lambda s: (0 if s.severity == "WARN" else 1, -s.priority, s.rule_id))
