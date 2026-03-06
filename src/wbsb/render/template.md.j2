@@ -1,3 +1,7 @@
+{%- macro format_value(value, hint) -%}
+{%- if value is none or value is undefined -%}—{%- elif hint == 'currency' -%}{{ "{:,}".format(value | round(0) | int) }}{%- elif hint == 'percent' -%}{{ "%.1f" | format(value * 100) }}%{%- elif hint == 'integer' -%}{{ "%d" | format(value | round(0) | int) }}{%- else -%}{{ "%.1f" | format(value) }}{%- endif -%}
+{%- endmacro -%}
+{%- set category_labels = {'acquisition': 'Acquisition', 'operations': 'Operations', 'revenue': 'Revenue', 'financial_health': 'Financial Health'} -%}
 # Weekly Business Signal Brief
 **Run ID:** {{ findings.run.run_id }}
 **Generated:** {{ findings.run.generated_at.strftime('%Y-%m-%d %H:%M UTC') }}
@@ -6,20 +10,38 @@
 
 ---
 
+## Weekly Priorities
+{% set warn_signals = findings.signals | selectattr('severity', 'equalto', 'WARN') | list -%}
+{% set info_signals = findings.signals | selectattr('severity', 'equalto', 'INFO') | list -%}
+{% set first_warn = warn_signals[0] if warn_signals else none -%}
+- {{ warn_signals | length }} WARN signal{{ 's' if warn_signals | length != 1 else '' }}
+- {{ info_signals | length }} INFO signal{{ 's' if info_signals | length != 1 else '' }}
+- Top issue: {% if first_warn %}{{ first_warn.label }}{% else %}No critical alerts this week{% endif %}
+
+---
+
 ## Signals ({{ findings.signals | length }})
 
 {% if findings.signals %}
-{% for signal in findings.signals %}
-### {{ signal.severity }} — {{ signal.metric_id }} (Rule {{ signal.rule_id }})
+{% for category, cat_signals in findings.signals | groupby('category') %}
+**{{ category_labels.get(category, category) }}**
+
+{% for signal in cat_signals %}
+{%- set metric = findings.metrics | selectattr('id', 'equalto', signal.metric_id) | first -%}
+{%- set hint = metric.format_hint if metric is defined else 'decimal' %}
+### {{ signal.severity }} — {{ signal.label }} (Rule {{ signal.rule_id }})
 
 {{ signal.explanation }}
 
 **Evidence:**
-- Current: {{ signal.evidence.current }}
-- Previous: {{ signal.evidence.previous }}
-- Δ absolute: {{ signal.evidence.delta_abs }}
-- Δ %: {% if signal.evidence.delta_pct is not none %}{{ "%.1f"|format(signal.evidence.delta_pct * 100) }}%{% else %}N/A{% endif %}
-
+- Current: {{ format_value(signal.evidence.current, hint) }}
+- Previous: {{ format_value(signal.evidence.previous, hint) }}
+- Δ absolute: {{ format_value(signal.evidence.delta_abs, hint) }}
+- Δ %: {{ format_value(signal.evidence.delta_pct, 'percent') }}
+{% if 'threshold' in signal.evidence %}- Threshold: {{ format_value(signal.evidence.threshold, hint) }}
+{% endif %}{% if 'threshold_pct' in signal.evidence %}- Threshold %: {{ format_value(signal.evidence.threshold_pct, 'percent') }}
+{% endif %}{% if 'threshold_abs' in signal.evidence %}- Threshold (abs): {{ format_value(signal.evidence.threshold_abs, hint) }}
+{% endif %}
 {% if signal.guardrails %}
 **Guardrails:** {{ signal.guardrails | join('; ') }}
 {% endif %}
@@ -29,18 +51,35 @@
 
 ---
 {% endfor %}
+{% endfor %}
 {% else %}
 No signals fired this week. All metrics within thresholds.
 
 ---
 {% endif %}
 
+## Data Quality
+
+{% if findings.audit %}
+{% set audit_count = findings.audit | length -%}
+⚠️ {{ audit_count }} validation/coercion event{{ 's' if audit_count != 1 else '' }} detected.
+
+{% for event_type, events in findings.audit | groupby('event_type') %}
+- {{ event_type }}: {{ events | list | length }}
+{% endfor %}
+{% else %}
+No data quality issues detected.
+{% endif %}
+
+---
+
 ## Key Metrics
 
 | Metric | Current | Previous | Δ % |
 |--------|---------|----------|-----|
-{% for m in findings.metrics %}| {{ m.name }} | {% if m.current is not none %}{{ "%.4g"|format(m.current) }}{% else %}N/A{% endif %} | {% if m.previous is not none %}{{ "%.4g"|format(m.previous) }}{% else %}N/A{% endif %} | {% if m.delta_pct is not none %}{{ "%.1f"|format(m.delta_pct * 100) }}%{% else %}N/A{% endif %} |
-{% endfor %}
+{% for cat_order, cat_group in findings.metrics | groupby('category_order') %}{% set cat_items = cat_group | list %}| **{{ category_labels.get(cat_items[0].category, cat_items[0].category) }}** | | | |
+{% for m in cat_items %}| {{ m.name }} | {{ format_value(m.current, m.format_hint) }} | {{ format_value(m.previous, m.format_hint) }} | {{ format_value(m.delta_pct, 'percent') }} |
+{% endfor %}{% endfor %}
 
 ---
 
