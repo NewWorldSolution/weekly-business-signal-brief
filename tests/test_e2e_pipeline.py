@@ -35,3 +35,7 @@ def test_e2e_pipeline_produces_artifacts(tmp_path):
     assert "audit_events_count" in manifest
     assert manifest["render_mode"] == "off"
     assert isinstance(manifest["config_version"], str)
+
+    brief_md = (run_dir / "brief.md").read_text()
+    assert "Weekly Priorities" in brief_md
+    assert "Revenue" in brief_md
