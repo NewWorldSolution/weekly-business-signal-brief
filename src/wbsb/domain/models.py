@@ -99,3 +99,8 @@ class Manifest(BaseModel):
     git_commit: str | None = None
     elapsed_seconds: float
     artifacts: dict[str, str] = Field(default_factory=dict)
+    signals_warn_count: int = 0
+    signals_info_count: int = 0
+    audit_events_count: int = 0
+    render_mode: str = "off"
+    config_version: str = ""
