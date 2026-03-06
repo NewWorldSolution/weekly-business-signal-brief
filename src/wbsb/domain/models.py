@@ -29,6 +29,10 @@ class MetricResult(BaseModel):
     id: str
     name: str
     unit: str
+    format_hint: str = "decimal"
+    category: str = ""
+    category_order: int = 0
+    display_order: int = 0
     current: float | None = None
     previous: float | None = None
     delta_abs: float | None = None
