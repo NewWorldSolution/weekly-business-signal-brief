@@ -28,3 +28,10 @@ def test_e2e_pipeline_produces_artifacts(tmp_path):
     assert findings["schema_version"] == "1.1"
     assert isinstance(findings["metrics"], list) and len(findings["metrics"]) > 0
     assert "signals" in findings
+
+    manifest = json.loads((run_dir / "manifest.json").read_text())
+    assert "signals_warn_count" in manifest
+    assert "signals_info_count" in manifest
+    assert "audit_events_count" in manifest
+    assert manifest["render_mode"] == "off"
+    assert isinstance(manifest["config_version"], str)
