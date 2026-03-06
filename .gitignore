@@ -210,3 +210,8 @@ runs/
 
 
 Prompt.md
+
+# macOS
+.DS_Store
+
+tmp/
