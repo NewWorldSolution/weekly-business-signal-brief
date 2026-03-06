@@ -29,6 +29,10 @@ class MetricResult(BaseModel):
     id: str
     name: str
     unit: str
+    format_hint: str = "decimal"
+    category: str = ""
+    category_order: int = 0
+    display_order: int = 0
     current: float | None = None
     previous: float | None = None
     delta_abs: float | None = None
@@ -42,7 +46,11 @@ class Signal(BaseModel):
     rule_id: str
     severity: str  # WARN | INFO
     metric_id: str
+    label: str = ""
+    category: str = ""
+    priority: int = 0
     explanation: str
+    # evidence may include: threshold, threshold_pct, threshold_abs
     evidence: dict[str, Any]
     guardrails: list[str] = Field(default_factory=list)
     reliability: str = "ok"  # ok | low
@@ -72,7 +80,7 @@ class RunMeta(BaseModel):
 class Findings(BaseModel):
     """Full findings document."""
 
-    schema_version: str = "1.0"
+    schema_version: str = "1.1"
     run: RunMeta
     periods: Periods
     metrics: list[MetricResult]
@@ -91,3 +99,8 @@ class Manifest(BaseModel):
     git_commit: str | None = None
     elapsed_seconds: float
     artifacts: dict[str, str] = Field(default_factory=dict)
+    signals_warn_count: int = 0
+    signals_info_count: int = 0
+    audit_events_count: int = 0
+    render_mode: str = "off"
+    config_version: str = ""

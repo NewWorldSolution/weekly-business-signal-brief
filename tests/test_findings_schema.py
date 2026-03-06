@@ -63,7 +63,7 @@ def test_findings_valid():
         ],
         audit=[AuditEvent(event_type="info", message="Validated 8 rows")],
     )
-    assert f.schema_version == "1.0"
+    assert f.schema_version == "1.1"
     assert len(f.metrics) == 1
     assert len(f.signals) == 1
 
@@ -80,7 +80,7 @@ def test_findings_json_round_trip():
     data = json.loads(json_str)
     f2 = Findings.model_validate(data)
     assert f2.run.run_id == f.run.run_id
-    assert f2.schema_version == "1.0"
+    assert f2.schema_version == "1.1"
 
 
 def test_metric_result_none_fields():

@@ -18,6 +18,11 @@ def write_artifacts(
     input_path: Path,
     input_hash: str,
     config_hash: str,
+    signals_warn_count: int = 0,
+    signals_info_count: int = 0,
+    audit_events_count: int = 0,
+    render_mode: str = "off",
+    config_version: str = "",
 ) -> None:
     """Write all run artifacts to run_dir.
 
@@ -35,6 +40,11 @@ def write_artifacts(
         input_path: Path to input file.
         input_hash: SHA-256 of input file.
         config_hash: SHA-256 of config.
+        signals_warn_count: Number of WARN signals fired.
+        signals_info_count: Number of INFO signals fired.
+        audit_events_count: Number of audit/validation events.
+        render_mode: LLM render mode used for this run.
+        config_version: Version string from rules.yaml.
     """
     findings_path = run_dir / "findings.json"
     brief_path = run_dir / "brief.md"
@@ -64,6 +74,11 @@ def write_artifacts(
                 "findings.json": findings_hash,
                 "brief.md": brief_hash,
             },
+            signals_warn_count=signals_warn_count,
+            signals_info_count=signals_info_count,
+            audit_events_count=audit_events_count,
+            render_mode=render_mode,
+            config_version=config_version,
         )
         manifest_path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
 

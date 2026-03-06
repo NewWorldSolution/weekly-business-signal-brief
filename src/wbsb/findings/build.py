@@ -79,7 +79,10 @@ def build_findings(
 
     # Build MetricResult list
     metric_results: list[MetricResult] = []
-    for metric_def in sorted(METRIC_REGISTRY_BY_ID.values(), key=lambda m: m.id):
+    for metric_def in sorted(
+        METRIC_REGISTRY_BY_ID.values(),
+        key=lambda m: (m.category_order, m.display_order),
+    ):
         m_id = metric_def.id
         delta_abs, delta_pct = deltas.get(m_id, (None, None))
         metric_results.append(
@@ -87,6 +90,10 @@ def build_findings(
                 id=m_id,
                 name=metric_def.name,
                 unit=metric_def.unit,
+                format_hint=metric_def.format_hint,
+                category=metric_def.category,
+                category_order=metric_def.category_order,
+                display_order=metric_def.display_order,
                 current=curr_metrics.get(m_id),
                 previous=prev_metrics.get(m_id),
                 delta_abs=delta_abs,

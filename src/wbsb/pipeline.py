@@ -107,6 +107,11 @@ def execute(
             input_path=input_path,
             input_hash=input_hash,
             config_hash=config_hash,
+            signals_warn_count=len([s for s in findings.signals if s.severity == "WARN"]),
+            signals_info_count=len([s for s in findings.signals if s.severity == "INFO"]),
+            audit_events_count=len(findings.audit),
+            render_mode=llm_mode,
+            config_version=raw_config.get("config_version", ""),
         )
 
         log.info("pipeline.done", run_dir=str(run_dir), elapsed_seconds=round(elapsed, 3))
