@@ -49,6 +49,9 @@ class Signal(BaseModel):
     label: str = ""
     category: str = ""
     priority: int = 0
+    condition: str = ""          # "delta_pct_lte" | "delta_pct_gte" |
+                                 # "absolute_lt" | "absolute_gt" |
+                                 # "hybrid_delta_pct_lte"
     explanation: str
     # evidence may include: threshold, threshold_pct, threshold_abs
     evidence: dict[str, Any]
@@ -80,7 +83,7 @@ class RunMeta(BaseModel):
 class Findings(BaseModel):
     """Full findings document."""
 
-    schema_version: str = "1.1"
+    schema_version: str = "1.2"
     run: RunMeta
     periods: Periods
     metrics: list[MetricResult]

@@ -25,7 +25,7 @@ def test_e2e_pipeline_produces_artifacts(tmp_path):
     assert (run_dir / "logs.jsonl").exists()
 
     findings = json.loads((run_dir / "findings.json").read_text())
-    assert findings["schema_version"] == "1.1"
+    assert findings["schema_version"] == "1.2"
     assert isinstance(findings["metrics"], list) and len(findings["metrics"]) > 0
     assert "signals" in findings
 
