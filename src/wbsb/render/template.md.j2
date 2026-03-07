@@ -1,7 +1,6 @@
 {%- macro format_value(value, hint) -%}
 {%- if value is none or value is undefined -%}—{%- elif hint == 'currency' -%}{{ "{:,}".format(value | round(0) | int) }}{%- elif hint == 'percent' -%}{{ "%.1f" | format(value * 100) }}%{%- elif hint == 'integer' -%}{{ "%d" | format(value | round(0) | int) }}{%- else -%}{{ "%.1f" | format(value) }}{%- endif -%}
 {%- endmacro -%}
-{%- set category_labels = {'acquisition': 'Acquisition', 'operations': 'Operations', 'revenue': 'Revenue', 'financial_health': 'Financial Health'} -%}
 # Weekly Business Signal Brief
 **Run ID:** {{ findings.run.run_id }}
 **Generated:** {{ findings.run.generated_at.strftime('%Y-%m-%d %H:%M UTC') }}
@@ -11,41 +10,38 @@
 ---
 
 ## Weekly Priorities
-{% set warn_signals = findings.signals | selectattr('severity', 'equalto', 'WARN') | list -%}
-{% set info_signals = findings.signals | selectattr('severity', 'equalto', 'INFO') | list -%}
-{% set first_warn = warn_signals[0] if warn_signals else none -%}
-- {{ warn_signals | length }} WARN signal{{ 's' if warn_signals | length != 1 else '' }}
-- {{ info_signals | length }} INFO signal{{ 's' if info_signals | length != 1 else '' }}
-- Top issue: {% if first_warn %}{{ first_warn.label }}{% else %}No critical alerts this week{% endif %}
+
+- {{ warn_count }} WARN signal{{ 's' if warn_count != 1 else '' }}
+- {{ info_count }} INFO signal{{ 's' if info_count != 1 else '' }}
+- Top issue: {% if top_warn %}{{ top_warn.label }}{% else %}No critical alerts this week{% endif %}
 
 ---
 
 ## Signals ({{ findings.signals | length }})
 
-{% if findings.signals %}
-{% for category, cat_signals in findings.signals | groupby('category') %}
+{% if signal_contexts %}
+{% for category, cat_scs in signal_contexts | groupby('category') %}
 **{{ category_labels.get(category, category) }}**
 
-{% for signal in cat_signals %}
-{%- set metric = findings.metrics | selectattr('id', 'equalto', signal.metric_id) | first -%}
-{%- set hint = metric.format_hint if metric is defined else 'decimal' %}
-### {{ signal.severity }} — {{ signal.label }} (Rule {{ signal.rule_id }})
+{% for sc in cat_scs %}
+{%- set ev = sc.signal.evidence %}
+### {{ sc.signal.severity }} — {{ sc.signal.label }} (Rule {{ sc.signal.rule_id }})
 
-{{ signal.explanation }}
+{{ sc.narrative }}
 
 **Evidence:**
-- Current: {{ format_value(signal.evidence.current, hint) }}
-- Previous: {{ format_value(signal.evidence.previous, hint) }}
-- Δ absolute: {{ format_value(signal.evidence.delta_abs, hint) }}
-- Δ %: {{ format_value(signal.evidence.delta_pct, 'percent') }}
-{% if 'threshold' in signal.evidence %}- Threshold: {{ format_value(signal.evidence.threshold, hint) }}
-{% endif %}{% if 'threshold_pct' in signal.evidence %}- Threshold %: {{ format_value(signal.evidence.threshold_pct, 'percent') }}
-{% endif %}{% if 'threshold_abs' in signal.evidence %}- Threshold (abs): {{ format_value(signal.evidence.threshold_abs, hint) }}
+- Current: {{ format_value(ev.current, sc.format_hint) }}
+- Previous: {{ format_value(ev.previous, sc.format_hint) }}
+- Δ absolute: {{ format_value(ev.delta_abs, sc.format_hint) }}
+- Δ %: {{ format_value(ev.delta_pct, 'percent') }}
+{% if 'threshold' in ev %}- Threshold: {{ format_value(ev.threshold, sc.threshold_hint) }}
+{% endif %}{% if 'threshold_pct' in ev %}- Threshold %: {{ format_value(ev.threshold_pct, 'percent') }}
+{% endif %}{% if 'threshold_abs' in ev %}- Threshold (abs): {{ format_value(ev.threshold_abs, sc.format_hint) }}
 {% endif %}
-{% if signal.guardrails %}
-**Guardrails:** {{ signal.guardrails | join('; ') }}
+{% if sc.signal.guardrails %}
+**Guardrails:** {{ sc.signal.guardrails | join('; ') }}
 {% endif %}
-{% if signal.reliability == "low" %}
+{% if sc.signal.reliability == "low" %}
 > ⚠️ Low-reliability signal: previous period data below minimum threshold.
 {% endif %}
 
