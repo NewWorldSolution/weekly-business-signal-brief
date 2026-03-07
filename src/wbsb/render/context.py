@@ -178,6 +178,13 @@ def prepare_render_context(findings: Findings) -> dict[str, Any]:
 
     affected_categories = sorted({s.category for s in findings.signals if s.category})
 
+    top_signals = warn_signals[:3]
+
+    severity_by_category: dict[str, int] = {}
+    for signal in warn_signals:
+        label = CATEGORY_LABELS.get(signal.category, signal.category)
+        severity_by_category[label] = severity_by_category.get(label, 0) + 1
+
     signal_contexts = [
         _build_signal_context(s, metric_by_id) for s in findings.signals
     ]
@@ -187,6 +194,8 @@ def prepare_render_context(findings: Findings) -> dict[str, Any]:
         "warn_count": len(warn_signals),
         "info_count": len(info_signals),
         "top_warn": top_warn,
+        "top_signals": top_signals,
+        "severity_by_category": severity_by_category,
         "affected_categories": affected_categories,
         "category_labels": CATEGORY_LABELS,
         "metric_by_id": metric_by_id,

@@ -618,6 +618,121 @@ class TestThresholdFormattingFix:
 
 
 # ---------------------------------------------------------------------------
+# top_signals
+# ---------------------------------------------------------------------------
+
+
+class TestTopSignals:
+    def test_top_signals_capped_at_three(self):
+        signals = [
+            make_signal(rule_id=f"W{i}", label=f"Signal {i}", severity="WARN")
+            for i in range(5)
+        ]
+        findings = make_findings(signals=signals)
+        ctx = prepare_render_context(findings)
+        assert len(ctx["top_signals"]) == 3
+
+    def test_top_signals_warn_only(self):
+        warn1 = make_signal(rule_id="A1", severity="WARN", label="Warn One")
+        warn2 = make_signal(rule_id="A2", severity="WARN", label="Warn Two")
+        info = make_signal(rule_id="Z1", severity="INFO", label="Info One")
+        # Signals list: two WARNs then one INFO
+        findings = make_findings(signals=[warn1, warn2, info])
+        ctx = prepare_render_context(findings)
+        assert all(s.severity == "WARN" for s in ctx["top_signals"])
+
+    def test_top_signals_empty_when_no_warn(self):
+        info = make_signal(rule_id="Z1", severity="INFO")
+        findings = make_findings(signals=[info])
+        ctx = prepare_render_context(findings)
+        assert ctx["top_signals"] == []
+
+    def test_top_signals_preserves_engine_order(self):
+        """top_signals must reflect the order signals appear in findings.signals."""
+        w1 = make_signal(rule_id="A1", severity="WARN", label="First")
+        w2 = make_signal(rule_id="B1", severity="WARN", label="Second")
+        w3 = make_signal(rule_id="C1", severity="WARN", label="Third")
+        w4 = make_signal(rule_id="D1", severity="WARN", label="Fourth")
+        findings = make_findings(signals=[w1, w2, w3, w4])
+        ctx = prepare_render_context(findings)
+        rule_ids = [s.rule_id for s in ctx["top_signals"]]
+        assert rule_ids == ["A1", "B1", "C1"]
+
+    def test_top_signals_fewer_than_three(self):
+        w1 = make_signal(rule_id="A1", severity="WARN")
+        findings = make_findings(signals=[w1])
+        ctx = prepare_render_context(findings)
+        assert len(ctx["top_signals"]) == 1
+        assert ctx["top_signals"][0].rule_id == "A1"
+
+
+# ---------------------------------------------------------------------------
+# severity_by_category
+# ---------------------------------------------------------------------------
+
+
+class TestSeverityByCategory:
+    def test_severity_by_category_counts_warn_only(self):
+        warn = make_signal(rule_id="A1", severity="WARN", category="revenue")
+        info = make_signal(rule_id="Z1", severity="INFO", category="revenue")
+        findings = make_findings(signals=[warn, info])
+        ctx = prepare_render_context(findings)
+        # INFO must not be counted
+        assert ctx["severity_by_category"] == {"Revenue": 1}
+
+    def test_severity_by_category_empty_when_no_warn(self):
+        info = make_signal(rule_id="Z1", severity="INFO", category="revenue")
+        findings = make_findings(signals=[info])
+        ctx = prepare_render_context(findings)
+        assert ctx["severity_by_category"] == {}
+
+    def test_severity_by_category_counts_correctly(self):
+        signals = [
+            make_signal(rule_id="A1", severity="WARN", category="revenue"),
+            make_signal(rule_id="H1", severity="WARN", category="financial_health"),
+            make_signal(rule_id="H2", severity="WARN", category="financial_health"),
+            make_signal(rule_id="B1", severity="WARN", category="acquisition"),
+        ]
+        findings = make_findings(signals=signals)
+        ctx = prepare_render_context(findings)
+        sbc = ctx["severity_by_category"]
+        assert sbc["Revenue"] == 1
+        assert sbc["Financial Health"] == 2
+        assert sbc["Acquisition"] == 1
+
+    def test_severity_by_category_uses_display_labels(self):
+        """Category keys must be human-readable display labels, not raw IDs."""
+        signals = [
+            make_signal(rule_id="A1", severity="WARN", category="revenue"),
+            make_signal(rule_id="H1", severity="WARN", category="financial_health"),
+            make_signal(rule_id="F1", severity="WARN", category="operations"),
+        ]
+        findings = make_findings(signals=signals)
+        ctx = prepare_render_context(findings)
+        sbc = ctx["severity_by_category"]
+        assert "revenue" not in sbc
+        assert "financial_health" not in sbc
+        assert "operations" not in sbc
+        assert "Revenue" in sbc
+        assert "Financial Health" in sbc
+        assert "Operations" in sbc
+
+    def test_severity_by_category_order_is_deterministic(self):
+        """Order must match first appearance of category in WARN signal sequence."""
+        signals = [
+            make_signal(rule_id="A1", severity="WARN", category="revenue"),
+            make_signal(rule_id="H1", severity="WARN", category="financial_health"),
+            make_signal(rule_id="H2", severity="WARN", category="financial_health"),
+            make_signal(rule_id="B1", severity="WARN", category="acquisition"),
+            make_signal(rule_id="F1", severity="WARN", category="operations"),
+        ]
+        findings = make_findings(signals=signals)
+        ctx = prepare_render_context(findings)
+        keys = list(ctx["severity_by_category"].keys())
+        assert keys == ["Revenue", "Financial Health", "Acquisition", "Operations"]
+
+
+# ---------------------------------------------------------------------------
 # Template surface: narrative not explanation
 # ---------------------------------------------------------------------------
 
