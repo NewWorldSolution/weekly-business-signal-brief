@@ -6,6 +6,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from wbsb.domain.models import Findings
+from wbsb.render.context import prepare_render_context
 
 _TEMPLATE_DIR = Path(__file__).parent
 _TEMPLATE_NAME = "template.md.j2"
@@ -26,4 +27,5 @@ def render_template(findings: Findings) -> str:
         keep_trailing_newline=True,
     )
     template = env.get_template(_TEMPLATE_NAME)
-    return template.render(findings=findings)
+    ctx = prepare_render_context(findings)
+    return template.render(**ctx)
