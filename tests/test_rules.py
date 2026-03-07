@@ -235,6 +235,33 @@ def test_hybrid_volume_metric_high_volume_pct_fires():
     assert "X1" in [s.rule_id for s in signals]
 
 
+def test_signal_condition_is_propagated():
+    """Every fired signal carries the condition type that triggered it."""
+    curr = {"net_revenue": 7000.0, "bookings_total": 1.0, "gross_margin": 0.45}
+    prev = {"net_revenue": 9000.0, "bookings_total": 4.0,
+            "leads_paid": 10.0, "new_clients_paid": 5.0}
+    deltas = {
+        "net_revenue": (-2000.0, -0.2222),
+        "bookings_total": (-3.0, -0.75),
+        "gross_margin": (-0.05, -0.10),
+    }
+    signals = evaluate_rules(curr, prev, deltas, BASE_CONFIG, RUN_CONFIG, "ok")
+    for s in signals:
+        assert s.condition != "", f"Signal {s.rule_id} has empty condition"
+
+    a1 = next((s for s in signals if s.rule_id == "A1"), None)
+    if a1:
+        assert a1.condition == "delta_pct_lte"
+
+    h1 = next((s for s in signals if s.rule_id == "H1"), None)
+    if h1:
+        assert h1.condition == "absolute_lt"
+
+    f1 = next((s for s in signals if s.rule_id == "F1"), None)
+    if f1:
+        assert f1.condition == "hybrid_delta_pct_lte"
+
+
 def test_hybrid_no_volume_metric_fallback_fires():
     """Rule without volume_metric falls back to metric_id for volume check."""
     config_no_volume_metric = {

@@ -140,6 +140,7 @@ def evaluate_rules(
                     label=rule.get("label", ""),
                     category=rule.get("category", ""),
                     priority=rule.get("priority", 0),
+                    condition=condition,
                     explanation=explanation,
                     evidence=evidence,
                     guardrails=guardrails,
