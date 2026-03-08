@@ -205,7 +205,14 @@ class TestPromptInputs:
             "severity_by_category",
             "top_signals",
             "all_signals",
+            "grouped_signals",
+            "category_health_summary",
+            "business_mechanism_chains",
+            "dominant_cluster_exists",
+            "dominant_cluster_category",
+            "relationship_hints",
             "rule_ids",
+            "metric_ids",
         }
         assert required.issubset(inputs.keys())
 
@@ -291,6 +298,209 @@ class TestPromptInputs:
         }
         for sig in inputs["all_signals"]:
             assert required.issubset(sig.keys()), f"Missing keys: {required - sig.keys()}"
+
+    def test_signals_grouped_by_category(self):
+        signals = [
+            _make_signal(rule_id="B1", category="acquisition", metric_id="cac_paid"),
+            _make_signal(rule_id="C1", category="acquisition", metric_id="paid_lead_to_client"),
+            _make_signal(rule_id="A1", category="revenue", metric_id="net_revenue"),
+        ]
+        metrics = [
+            _make_metric(id="cac_paid", name="CAC (Paid)"),
+            _make_metric(
+                id="paid_lead_to_client",
+                name="Paid Lead to Client",
+                format_hint="percent",
+            ),
+            _make_metric(id="net_revenue", name="Net Revenue"),
+        ]
+        ctx = _make_ctx(signals=signals, metrics=metrics)
+        inputs = build_prompt_inputs(ctx)
+
+        categories = [group["category"] for group in inputs["grouped_signals"]]
+        assert categories == ["acquisition", "revenue"]
+        acquisition_rule_ids = [s["rule_id"] for s in inputs["grouped_signals"][0]["signals"]]
+        assert acquisition_rule_ids == ["B1", "C1"]
+
+    def test_category_health_summary_contains_counts_and_directional_consistency(self):
+        signals = [
+            _make_signal(rule_id="B1", category="acquisition", condition="delta_pct_gte"),
+            _make_signal(rule_id="C1", category="acquisition", condition="delta_pct_gte"),
+        ]
+        ctx = _make_ctx(signals=signals, metrics=[_make_metric(id="net_revenue")])
+        inputs = build_prompt_inputs(ctx)
+
+        acquisition = next(
+            item for item in inputs["category_health_summary"] if item["category"] == "acquisition"
+        )
+        assert acquisition["signal_count"] == 2
+        assert acquisition["warn_count"] == 2
+        assert acquisition["directional_consistency"] == "consistent"
+
+    def test_business_mechanism_chains_built_from_available_metrics(self):
+        metrics = [
+            _make_metric(
+                id="ad_spend_total",
+                name="Ad Spend Total",
+                current=1200.0,
+                previous=1000.0,
+            ),
+            _make_metric(
+                id="leads_paid",
+                name="Paid Leads",
+                current=35.0,
+                previous=40.0,
+                format_hint="integer",
+            ),
+            _make_metric(
+                id="paid_lead_to_client",
+                name="Paid Lead to Client",
+                current=0.20,
+                previous=0.25,
+                format_hint="percent",
+            ),
+            _make_metric(
+                id="new_clients_paid",
+                name="Paid New Clients",
+                current=7.0,
+                previous=10.0,
+                format_hint="integer",
+            ),
+            _make_metric(id="cac_paid", name="CAC (Paid)", current=171.0, previous=100.0),
+            _make_metric(
+                id="bookings_total",
+                name="Total Bookings",
+                current=50.0,
+                previous=55.0,
+                format_hint="integer",
+            ),
+            _make_metric(
+                id="show_rate",
+                name="Show Rate",
+                current=0.72,
+                previous=0.75,
+                format_hint="percent",
+            ),
+            _make_metric(
+                id="cancel_rate",
+                name="Cancel Rate",
+                current=0.15,
+                previous=0.12,
+                format_hint="percent",
+            ),
+            _make_metric(
+                id="appointments_completed",
+                name="Completed Appointments",
+                current=36.0,
+                previous=41.0,
+                format_hint="integer",
+            ),
+            _make_metric(
+                id="gross_margin",
+                name="Gross Margin",
+                current=0.47,
+                previous=0.50,
+                format_hint="percent",
+            ),
+            _make_metric(
+                id="marketing_pct_revenue",
+                name="Marketing % Revenue",
+                current=0.39,
+                previous=0.32,
+                format_hint="percent",
+            ),
+            _make_metric(
+                id="contribution_after_marketing",
+                name="Contribution After Marketing",
+                current=1400.0,
+                previous=1600.0,
+            ),
+        ]
+        ctx = _make_ctx(signals=[_make_signal()], metrics=metrics)
+        inputs = build_prompt_inputs(ctx)
+
+        chains = {chain["chain_id"]: chain for chain in inputs["business_mechanism_chains"]}
+        assert {"paid_acquisition", "operations", "financial"} == set(chains.keys())
+        assert len(chains["paid_acquisition"]["elements"]) == 5
+        assert len(chains["operations"]["elements"]) == 4
+        assert len(chains["financial"]["elements"]) == 3
+
+    def test_relationship_hints_forbidden_terms_absent_and_count_capped(self):
+        signals = [
+            _make_signal(
+                rule_id="B1",
+                category="acquisition",
+                condition="delta_pct_gte",
+                metric_id="cac_paid",
+            ),
+            _make_signal(
+                rule_id="C1",
+                category="acquisition",
+                condition="delta_pct_lte",
+                metric_id="paid_lead_to_client",
+            ),
+            _make_signal(
+                rule_id="D1",
+                category="operations",
+                condition="delta_pct_lte",
+                metric_id="show_rate",
+            ),
+            _make_signal(
+                rule_id="E1",
+                category="operations",
+                condition="delta_pct_gte",
+                metric_id="cancel_rate",
+            ),
+            _make_signal(
+                rule_id="A1",
+                category="revenue",
+                condition="delta_pct_lte",
+                metric_id="net_revenue",
+            ),
+            _make_signal(
+                rule_id="H1",
+                category="financial_health",
+                condition="absolute_lt",
+                metric_id="gross_margin",
+            ),
+        ]
+        metrics = [
+            _make_metric(id="cac_paid", name="CAC (Paid)"),
+            _make_metric(
+                id="paid_lead_to_client",
+                name="Paid Lead Conversion",
+                format_hint="percent",
+            ),
+            _make_metric(id="show_rate", name="Show Rate", format_hint="percent"),
+            _make_metric(id="cancel_rate", name="Cancel Rate", format_hint="percent"),
+            _make_metric(id="net_revenue", name="Net Revenue"),
+            _make_metric(id="gross_margin", name="Gross Margin", format_hint="percent"),
+        ]
+        ctx = _make_ctx(signals=signals, metrics=metrics)
+        inputs = build_prompt_inputs(ctx)
+
+        hints = inputs["relationship_hints"]
+        forbidden_terms = [
+            "because",
+            "caused",
+            "driver",
+            "likely",
+            "indicates",
+            "suggests",
+            "should",
+            "recommend",
+            "consider",
+            "review",
+            "improve",
+            "fix",
+            "protect margin",
+            "cut spend",
+        ]
+        assert len(hints) <= 5
+        for hint in hints:
+            lower_hint = hint.lower()
+            for term in forbidden_terms:
+                assert term not in lower_hint
 
 
 # ---------------------------------------------------------------------------
@@ -383,6 +593,23 @@ class TestUserPromptRendering:
         prompt = render_user_prompt(inputs, "full")
         assert "A1" in prompt
         assert "B1" in prompt
+
+    def test_user_full_prompt_uses_grouped_sections(self):
+        signals = [
+            _make_signal(rule_id="B1", category="acquisition", metric_id="cac_paid"),
+            _make_signal(rule_id="A1", category="revenue", metric_id="net_revenue"),
+        ]
+        metrics = [
+            _make_metric(id="cac_paid", name="CAC (Paid)"),
+            _make_metric(id="net_revenue", name="Net Revenue"),
+        ]
+        ctx = _make_ctx(signals=signals, metrics=metrics)
+        inputs = build_prompt_inputs(ctx)
+        prompt = render_user_prompt(inputs, "full")
+        assert "DOMINANT CLUSTER FACTS" in prompt
+        assert "SIGNAL CLUSTER SUMMARY" in prompt
+        assert "BUSINESS MECHANISM CHAINS" in prompt
+        assert "SIGNALS GROUPED BY CATEGORY" in prompt
 
     def test_user_prompt_contains_rule_ids(self):
         ctx = _make_ctx(signals=[_make_signal(rule_id="REV_DROP")])

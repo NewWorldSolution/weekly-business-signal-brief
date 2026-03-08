@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from collections import Counter
 from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -43,6 +44,40 @@ _PROMPT_VERSIONS = {
 
 _EXECUTIVE_SUMMARY_MAX_CHARS = 800
 _EXECUTIVE_SUMMARY_MIN_CHARS = 1
+_FULL_PROMPT_TEMPLATE = "user_full_v2.j2"
+
+_CHAIN_DEFINITIONS: list[dict[str, Any]] = [
+    {
+        "chain_id": "paid_acquisition",
+        "title": "Paid Acquisition Chain",
+        "metrics": [
+            "ad_spend_total",
+            "leads_paid",
+            "paid_lead_to_client",
+            "new_clients_paid",
+            "cac_paid",
+        ],
+    },
+    {
+        "chain_id": "operations",
+        "title": "Operational Chain",
+        "metrics": [
+            "bookings_total",
+            "show_rate",
+            "cancel_rate",
+            "appointments_completed",
+        ],
+    },
+    {
+        "chain_id": "financial",
+        "title": "Financial Chain",
+        "metrics": [
+            "gross_margin",
+            "marketing_pct_revenue",
+            "contribution_after_marketing",
+        ],
+    },
+]
 
 # ---------------------------------------------------------------------------
 # LLM Client Protocol
@@ -258,6 +293,18 @@ def build_prompt_inputs(ctx: dict[str, Any]) -> dict[str, Any]:
 
     # Collect all rule_ids for response validation
     rule_ids = [s["rule_id"] for s in all_signal_inputs]
+    metric_ids = [m.id for m in findings.metrics]
+
+    grouped_signals = _group_signals_by_category(all_signal_inputs)
+    category_health_summary = _build_category_health_summary(grouped_signals)
+    dominant_cluster_exists, dominant_cluster_category = _resolve_dominant_cluster(
+        grouped_signals
+    )
+    business_mechanism_chains = _build_business_mechanism_chains(findings.metrics)
+    relationship_hints = _build_relationship_hints(
+        grouped_signals=grouped_signals,
+        chains=business_mechanism_chains,
+    )
 
     return {
         # Period info
@@ -275,9 +322,168 @@ def build_prompt_inputs(ctx: dict[str, Any]) -> dict[str, Any]:
         "top_signals": top_signal_inputs,
         # All signals (for full mode)
         "all_signals": all_signal_inputs,
+        # Grouped deterministic evidence for full mode
+        "grouped_signals": grouped_signals,
+        "category_health_summary": category_health_summary,
+        "business_mechanism_chains": business_mechanism_chains,
+        "dominant_cluster_exists": dominant_cluster_exists,
+        "dominant_cluster_category": dominant_cluster_category,
+        "relationship_hints": relationship_hints,
         # Rule IDs for validation
         "rule_ids": rule_ids,
+        "metric_ids": metric_ids,
     }
+
+
+def _group_signals_by_category(all_signal_inputs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group flat signal inputs by category for full-mode prompt rendering."""
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for signal in all_signal_inputs:
+        grouped.setdefault(signal["category"], []).append(signal)
+
+    preferred_order = ("acquisition", "financial_health", "operations", "revenue")
+    ordered_categories = [
+        category for category in preferred_order if category in grouped
+    ] + sorted(category for category in grouped if category not in preferred_order)
+
+    result: list[dict[str, Any]] = []
+    for category in ordered_categories:
+        signals = grouped[category]
+        result.append({
+            "category": category,
+            "category_display": signals[0]["category_display"] if signals else category,
+            "signals": signals,
+        })
+    return result
+
+
+def _build_category_health_summary(
+    grouped_signals: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build conservative deterministic category summaries with no interpretation."""
+    summary: list[dict[str, Any]] = []
+    for group in grouped_signals:
+        directions = {
+            signal["direction"] for signal in group["signals"]
+            if signal.get("direction") in {"up", "down"}
+        }
+        if len(directions) == 1 and directions:
+            consistency = "consistent"
+            dominant_direction = next(iter(directions))
+        else:
+            consistency = "mixed"
+            dominant_direction = "mixed"
+
+        severity_counts = Counter(signal["severity"] for signal in group["signals"])
+        summary.append({
+            "category": group["category"],
+            "category_display": group["category_display"],
+            "signal_count": len(group["signals"]),
+            "warn_count": severity_counts.get("WARN", 0),
+            "severity_counts": dict(severity_counts),
+            "directional_consistency": consistency,
+            "dominant_direction": dominant_direction,
+        })
+    return summary
+
+
+def _resolve_dominant_cluster(
+    grouped_signals: list[dict[str, Any]],
+) -> tuple[bool, str | None]:
+    """Compute deterministic dominant WARN cluster fact for prompt header."""
+    warn_counts = [
+        (
+            group["category"],
+            sum(1 for signal in group["signals"] if signal["severity"] == "WARN"),
+        )
+        for group in grouped_signals
+    ]
+    if not warn_counts:
+        return False, None
+
+    dominant_category, dominant_warn_count = max(warn_counts, key=lambda item: item[1])
+    if dominant_warn_count >= 2:
+        return True, dominant_category
+    return False, None
+
+
+def _direction_from_metric(metric: Any) -> str:
+    """Return simple direction indicator for a metric movement."""
+    delta_pct = getattr(metric, "delta_pct", None)
+    delta_abs = getattr(metric, "delta_abs", None)
+    if delta_pct is not None:
+        if delta_pct > 0:
+            return "up"
+        if delta_pct < 0:
+            return "down"
+        return "flat"
+    if delta_abs is not None:
+        if delta_abs > 0:
+            return "up"
+        if delta_abs < 0:
+            return "down"
+    return "flat"
+
+
+def _build_business_mechanism_chains(metrics: list[Any]) -> list[dict[str, Any]]:
+    """Build deterministic chain views using existing MetricResult values only."""
+    metric_by_id = {m.id: m for m in metrics}
+    chains: list[dict[str, Any]] = []
+    for chain_def in _CHAIN_DEFINITIONS:
+        elements = []
+        for metric_id in chain_def["metrics"]:
+            metric = metric_by_id.get(metric_id)
+            if metric is None:
+                continue
+            elements.append({
+                "metric_id": metric.id,
+                "metric_name": metric.name,
+                "format_hint": metric.format_hint,
+                "current_value": metric.current,
+                "previous_value": metric.previous,
+                "delta_abs": metric.delta_abs,
+                "delta_pct": metric.delta_pct,
+                "direction": _direction_from_metric(metric),
+            })
+        chains.append({
+            "chain_id": chain_def["chain_id"],
+            "title": chain_def["title"],
+            "elements": elements,
+            "missing_metric_ids": [
+                metric_id
+                for metric_id in chain_def["metrics"]
+                if metric_id not in metric_by_id
+            ],
+        })
+    return chains
+
+
+def _build_relationship_hints(
+    grouped_signals: list[dict[str, Any]],
+    chains: list[dict[str, Any]],
+) -> list[str]:
+    """Generate up to five strictly descriptive deterministic relationship hints."""
+    hints: list[str] = []
+
+    for group in grouped_signals:
+        warn_signals = [s for s in group["signals"] if s["severity"] == "WARN"]
+        if len(warn_signals) >= 2:
+            rule_ids = ", ".join(signal["rule_id"] for signal in warn_signals[:3])
+            hints.append(
+                f"{group['category_display']} WARN signals co-occurred ({rule_ids})."
+            )
+
+    for chain in chains:
+        elements = chain["elements"]
+        for left, right in zip(elements, elements[1:]):
+            if left["direction"] != right["direction"]:
+                hints.append(
+                    f"{left['metric_name']} and {right['metric_name']} diverged "
+                    f"({left['metric_id']}, {right['metric_id']})."
+                )
+                break
+
+    return hints[:5]
 
 
 # ---------------------------------------------------------------------------
@@ -329,7 +535,10 @@ def render_user_prompt(prompt_inputs: dict[str, Any], mode: str) -> str:
     if mode not in ("summary", "full"):
         raise ValueError(f"Unknown llm mode: {mode!r}. Expected 'summary' or 'full'.")
     env = _get_jinja_env()
-    template = env.get_template(f"user_{mode}_v1.j2")
+    if mode == "full":
+        template = env.get_template(_FULL_PROMPT_TEMPLATE)
+    else:
+        template = env.get_template("user_summary_v1.j2")
     return template.render(**prompt_inputs)
 
 
