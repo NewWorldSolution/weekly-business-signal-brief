@@ -7,6 +7,14 @@
 **Period:** Week of {{ findings.periods.current_week_start }} → {{ findings.periods.current_week_end }}
 **vs. Prior Week:** {{ findings.periods.previous_week_start }} → {{ findings.periods.previous_week_end }}
 
+{% if executive_summary %}
+## Executive Summary
+
+{{ executive_summary }}
+
+---
+{% endif %}
+
 ---
 
 ## Weekly Priorities
@@ -40,7 +48,7 @@
 {%- set ev = sc.signal.evidence %}
 ### {{ sc.signal.severity }} — {{ sc.signal.label }} (Rule {{ sc.signal.rule_id }})
 
-{{ sc.narrative }}
+{{ llm_signal_narratives.get(sc.signal.rule_id, sc.narrative) }}
 
 **Evidence:**
 - Current: {{ format_value(ev.current, sc.format_hint) }}
