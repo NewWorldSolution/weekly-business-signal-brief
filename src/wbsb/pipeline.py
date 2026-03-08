@@ -22,10 +22,23 @@ def execute(
     input_path: Path,
     output_dir: Path,
     llm_mode: str,
+    llm_provider: str,
     config_path: Path,
     target_week: str | None,
 ) -> int:
-    """Execute the full pipeline and return exit code (0=success, 1=error)."""
+    """Execute the full pipeline and return exit code (0=success, 1=error).
+
+    Args:
+        input_path: Path to input CSV or XLSX file.
+        output_dir: Directory under which the run sub-directory is created.
+        llm_mode: LLM operating mode — "off", "summary", or "full".
+        llm_provider: LLM provider — currently only "anthropic" is implemented.
+        config_path: Path to rules YAML configuration file.
+        target_week: ISO week string (YYYY-Www) or None to use the latest week.
+
+    Returns:
+        0 on success, 1 on unrecoverable error.
+    """
     import uuid
     from datetime import datetime
 
@@ -38,7 +51,13 @@ def execute(
     init_run_logger(run_dir / "logs.jsonl")
     log = get_logger()
 
-    log.info("pipeline.start", run_id=run_id, input=str(input_path), llm_mode=llm_mode)
+    log.info(
+        "pipeline.start",
+        run_id=run_id,
+        input=str(input_path),
+        llm_mode=llm_mode,
+        llm_provider=llm_provider,
+    )
 
     start_time = time.monotonic()
 
@@ -88,13 +107,25 @@ def execute(
             metrics=len(findings.metrics),
         )
 
-        # Render brief
+        # Render brief — deterministic path or optional LLM overlay
+        llm_result = None
+        rendered_system_prompt = ""
+        rendered_user_prompt = ""
+
         if llm_mode == "off":
             log.info("render.template")
             brief_md = render_template(findings)
         else:
-            log.info("render.llm", mode=llm_mode)
-            brief_md = render_llm(findings, mode=llm_mode)
+            log.info("render.llm", mode=llm_mode, provider=llm_provider)
+            brief_md, llm_result, rendered_system_prompt, rendered_user_prompt = render_llm(
+                findings=findings,
+                mode=llm_mode,
+                provider=llm_provider,
+            )
+            if llm_result is None:
+                log.info("render.llm.fallback", mode=llm_mode, provider=llm_provider)
+            else:
+                log.info("render.llm.success", model=llm_result.model)
 
         elapsed = time.monotonic() - start_time
 
@@ -112,6 +143,11 @@ def execute(
             audit_events_count=len(findings.audit),
             render_mode=llm_mode,
             config_version=raw_config.get("config_version", ""),
+            llm_result=llm_result,
+            llm_mode=llm_mode,
+            llm_provider=llm_provider,
+            rendered_system_prompt=rendered_system_prompt,
+            rendered_user_prompt=rendered_user_prompt,
         )
 
         log.info("pipeline.done", run_dir=str(run_dir), elapsed_seconds=round(elapsed, 3))

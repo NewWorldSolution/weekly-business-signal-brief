@@ -9,6 +9,7 @@ def test_e2e_pipeline_produces_artifacts(tmp_path):
         input_path=Path("examples/sample_weekly.csv"),
         output_dir=tmp_path,
         llm_mode="off",
+        llm_provider="anthropic",
         config_path=Path("config/rules.yaml"),
         target_week=None,
     )
