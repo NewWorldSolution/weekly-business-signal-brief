@@ -543,3 +543,79 @@ class TestPipelineFullMode:
                 target_week=None,
             )
         assert exit_code == 0
+
+
+# ---------------------------------------------------------------------------
+# F. render_llm — full-mode signal narrative substitution in brief.md
+# ---------------------------------------------------------------------------
+
+
+class TestRenderLLMSignalNarrativeSubstitution:
+    """Prove that LLM signal narratives actually appear in the rendered brief.md.
+
+    This is the regression guard for the bug where render_llm called
+    render_template(findings) without llm_result, causing signal narratives
+    to be silently discarded.
+    """
+
+    def _full_response_with_narratives(self, rule_id: str, narrative: str) -> str:
+        return json.dumps({
+            "executive_summary": "Revenue fell sharply this week.",
+            "signal_narratives": {"narratives": {rule_id: narrative}},
+        })
+
+    def test_full_mode_signal_narrative_appears_in_brief(self):
+        findings = _make_findings(signals=[_make_signal(rule_id="A1")])
+        llm_narrative = "Net revenue dropped $2,000 (20%), crossing the alert threshold."
+        client = _SuccessClient(self._full_response_with_narratives("A1", llm_narrative))
+        brief_md, llm_result, _, _ = render_llm(
+            findings, mode="full", provider="anthropic", client=client
+        )
+        assert llm_result is not None
+        assert llm_narrative in brief_md, (
+            "LLM signal narrative must appear verbatim in the rendered brief"
+        )
+
+    def test_full_mode_signal_narrative_replaces_deterministic(self):
+        """The LLM narrative must override, not append to, the deterministic one."""
+        findings = _make_findings(signals=[_make_signal(rule_id="A1")])
+        deterministic_narrative = "Net Revenue declined 20.0% week-over-week."
+        llm_narrative = "LLM-UNIQUE-NARRATIVE: Revenue fell below threshold."
+        client = _SuccessClient(self._full_response_with_narratives("A1", llm_narrative))
+        brief_md, _, _, _ = render_llm(
+            findings, mode="full", provider="anthropic", client=client
+        )
+        assert llm_narrative in brief_md
+        assert deterministic_narrative not in brief_md
+
+    def test_full_mode_executive_summary_also_appears_in_brief(self):
+        findings = _make_findings(signals=[_make_signal(rule_id="A1")])
+        client = _SuccessClient(
+            self._full_response_with_narratives("A1", "Revenue dropped significantly.")
+        )
+        brief_md, _, _, _ = render_llm(
+            findings, mode="full", provider="anthropic", client=client
+        )
+        assert "Revenue fell sharply this week." in brief_md
+
+    def test_summary_mode_does_not_inject_signal_narratives(self):
+        """In summary mode the LLM response has no signal_narratives; template must
+        use deterministic narratives for all signals."""
+        findings = _make_findings(signals=[_make_signal(rule_id="A1")])
+        client = _SuccessClient(_valid_summary_json("Executive summary only."))
+        brief_md, llm_result, _, _ = render_llm(
+            findings, mode="summary", provider="anthropic", client=client
+        )
+        assert llm_result is not None
+        # summary response has no narratives — deterministic text must appear
+        assert "Net Revenue declined 20.0% week-over-week." in brief_md
+
+    def test_fallback_brief_uses_deterministic_narratives(self):
+        """On adapter failure the brief must contain the deterministic narratives."""
+        findings = _make_findings(signals=[_make_signal(rule_id="A1")])
+        client = _TimeoutClient()
+        brief_md, llm_result, _, _ = render_llm(
+            findings, mode="full", provider="anthropic", client=client
+        )
+        assert llm_result is None
+        assert "Net Revenue declined 20.0% week-over-week." in brief_md

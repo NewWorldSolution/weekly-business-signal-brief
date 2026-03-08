@@ -32,16 +32,15 @@ def _adapter_to_domain(adapter_result: llm_adapter.AdapterLLMResult) -> LLMResul
     )
 
 
-def _build_enriched_brief(deterministic_brief: str, llm_result: LLMResult) -> str:
-    """Prepend the LLM executive summary to the deterministic brief.
+def _build_enriched_brief(findings: Findings, llm_result: LLMResult) -> str:
+    """Render the brief with LLM executive summary and per-signal narrative overrides.
 
-    Task 4 will handle full template-integrated LLM rendering.
-    This is a minimal integration for Task 3 orchestration.
+    Delegates to render_template() with llm_result so both the executive
+    summary and signal_narratives are injected into the Jinja2 context.
+    The template prefers the LLM narrative for each matching rule_id and
+    falls back to the deterministic narrative for any that are missing.
     """
-    return (
-        f"## Executive Summary\n\n{llm_result.executive_summary}\n\n"
-        f"---\n\n{deterministic_brief}"
-    )
+    return render_template(findings, llm_result)
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +73,6 @@ def render_llm(
             rendered_system_prompt: Rendered system prompt (empty string on early failure).
             rendered_user_prompt: Rendered user prompt (empty string on early failure).
     """
-    deterministic_brief = render_template(findings)
     ctx = prepare_render_context(findings)
 
     # Render prompts for observability — results are passed to the artifact writer
@@ -87,16 +85,16 @@ def render_llm(
         rendered_user_prompt = llm_adapter.render_user_prompt(prompt_inputs, mode)
     except Exception as exc:  # noqa: BLE001
         logger.warning("render_llm: failed to render prompts: %s", exc)
-        return deterministic_brief, None, "", ""
+        return render_template(findings), None, "", ""
 
     # Delegate to adapter — returns None on any failure; never raises.
     adapter_result = llm_adapter.generate(ctx, mode=mode, provider=provider, client=client)
 
     if adapter_result is None:
         logger.info("render_llm: adapter returned None, using deterministic fallback")
-        return deterministic_brief, None, rendered_system_prompt, rendered_user_prompt
+        return render_template(findings), None, rendered_system_prompt, rendered_user_prompt
 
     llm_result = _adapter_to_domain(adapter_result)
-    brief_md = _build_enriched_brief(deterministic_brief, llm_result)
+    brief_md = _build_enriched_brief(findings, llm_result)
 
     return brief_md, llm_result, rendered_system_prompt, rendered_user_prompt
