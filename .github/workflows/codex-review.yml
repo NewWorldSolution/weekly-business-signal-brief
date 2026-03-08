@@ -1,0 +1,37 @@
+name: Codex Review
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  codex-review:
+    if: |
+      (github.event_name == 'issue_comment' && github.event.issue.pull_request && contains(github.event.comment.body, '@codex-review')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@codex-review'))
+
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Codex Review
+        uses: openai/codex-action@v1
+        with:
+          api_key: ${{ secrets.OPENAI_API_KEY }}
+          prompt: |
+            Review the changes in this pull request. Focus on:
+            - Correctness and logic errors
+            - Adherence to project conventions (deterministic pipeline, config-driven rules, no hardcoded thresholds)
+            - Test coverage for new behaviour
+            - Ruff lint compliance
+            Post a summary review comment on the PR.
