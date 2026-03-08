@@ -195,6 +195,22 @@ Only metrics/signals present in findings.]
 | Metrics Snapshot | Deterministic | Always |
 | Data Quality / Audit | Deterministic | Always |
 
+### Watch Next Week — Language Constraint
+
+The `watch_signals` field is strictly observational. It must never contain recommendations, operational advice, or instructions to the operator.
+
+**Permitted** — describing what a metric's direction will indicate:
+> "Watch conversion rate next week. If it recovers, CAC pressure should ease."
+
+**Forbidden** — directing the operator to take action:
+> "Review the sales process next week to improve conversion."
+
+Validation in `validate_response()` must reject any `watch_signals` entry whose `observation` text contains the following verbs or verb phrases:
+
+`recommend`, `should`, `need to`, `consider`, `review`, `adjust`, `increase`, `decrease`, `improve`, `fix`, `address`, `prioritize`
+
+This constraint is enforced in two places: the system prompt instructs the model to avoid these verbs, and `validate_response()` rejects entries that contain them. If a `watch_signals` entry fails this check, the entire `watch_signals` field is rejected and the Watch Next Week section is omitted.
+
 ### JSON Schema (Target)
 
 Derived from the report structure above. This schema replaces the current two-field schema.
@@ -481,6 +497,23 @@ Extend `render_template(findings, llm_result)` to pass:
 | Watch signals invalid | Section omitted |
 | Metrics Snapshot | Always deterministic |
 | Data Quality / Audit | Always deterministic |
+
+#### LLM Failure Scenarios
+
+Expected system behavior for common LLM failure cases. These must be covered by tests in `test_llm_integration.py` and `test_render_template.py`.
+
+| Failure Case | Expected System Behavior |
+|---|---|
+| LLM timeout or API error | `generate()` returns `None`; full deterministic report rendered; no LLM sections in output |
+| Invalid JSON response | `validate_response()` returns `None`; full deterministic fallback; `llm_response.json` not written |
+| Missing required `situation` field | `situation` section omitted; other valid LLM sections rendered if present |
+| Missing or invalid `key_story` field | Key Story section omitted; rest of report unaffected |
+| `key_story` present when `dominant_cluster_exists = False` | Key Story section omitted regardless of field value |
+| Invalid `watch_signals` references (unknown metric_id or rule_id) | Entire `watch_signals` field rejected; Watch Next Week section omitted |
+| `watch_signals` observation contains forbidden advice verbs | Entire `watch_signals` field rejected; Watch Next Week section omitted |
+| Signal narrative invalid or missing for a rule_id | Deterministic narrative used for that signal; other signals unaffected |
+| Group narrative invalid or missing for a category | Group-level sentence omitted; per-signal rendering continues normally |
+| Complete LLM failure across all fields | Full deterministic report rendered; output identical to `--llm-mode off` |
 
 #### Evaluation Harness
 
