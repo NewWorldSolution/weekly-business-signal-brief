@@ -161,8 +161,25 @@ class AnthropicClient:
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
         )
-        # Extract text from the first content block
-        return message.content[0].text
+        # Log the stop reason and content block types for observability.
+        logger.debug(
+            "Anthropic response received: stop_reason=%s, content_blocks=%s",
+            getattr(message, "stop_reason", "unknown"),
+            [getattr(b, "type", "unknown") for b in message.content],
+        )
+        # Concatenate all text-type blocks into a single string.
+        # This is safe when the model returns multiple text blocks or when the
+        # SDK wraps the response differently across versions.
+        response_text = "".join(
+            block.text for block in message.content if getattr(block, "type", None) == "text"
+        )
+        if not response_text:
+            raise ValueError(
+                f"Anthropic response contained no text blocks. "
+                f"stop_reason={getattr(message, 'stop_reason', 'unknown')!r}, "
+                f"content_types={[getattr(b, 'type', 'unknown') for b in message.content]!r}"
+            )
+        return response_text
 
 
 # ---------------------------------------------------------------------------
@@ -312,6 +329,36 @@ def render_user_prompt(prompt_inputs: dict[str, Any], mode: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Response sanitisation
+# ---------------------------------------------------------------------------
+
+
+def _strip_markdown_fences(text: str) -> str:
+    """Strip markdown code fences from an LLM response string.
+
+    Models sometimes wrap JSON output in ```json ... ``` fences.
+    This function removes them so the JSON parser receives a clean string.
+
+    Examples::
+
+        '```json\\n{"k": "v"}\\n```'  →  '{"k": "v"}'
+        '{"k": "v"}'                  →  '{"k": "v"}'   (no-op)
+    """
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        parts = stripped.split("```")
+        # parts[0] is empty (before the opening fence),
+        # parts[1] is the fenced content, parts[2+] are after the closing fence.
+        if len(parts) >= 2:
+            inner = parts[1]
+            # Remove optional language tag (e.g. "json\n" or "json ")
+            if inner.startswith("json"):
+                inner = inner[4:]
+            stripped = inner.strip()
+    return stripped
+
+
+# ---------------------------------------------------------------------------
 # Response validation
 # ---------------------------------------------------------------------------
 
@@ -337,6 +384,9 @@ def validate_response(
     Returns:
         Validated AdapterLLMResult or None if validation fails.
     """
+    # Step 0: sanitise — strip markdown code fences if the model added them.
+    raw = _strip_markdown_fences(raw)
+
     # Step 1: parse JSON
     try:
         data = json.loads(raw)
