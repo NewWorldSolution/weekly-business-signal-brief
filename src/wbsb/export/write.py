@@ -12,7 +12,7 @@ from wbsb.utils.hash import file_sha256
 
 
 def _prompt_hash(rendered_system_prompt: str, rendered_user_prompt: str) -> str:
-    payload = f"{rendered_system_prompt}\n---\n{rendered_user_prompt}".encode("utf-8")
+    payload = f"{rendered_system_prompt}\n---\n{rendered_user_prompt}".encode()
     return hashlib.sha256(payload).hexdigest()
 
 
