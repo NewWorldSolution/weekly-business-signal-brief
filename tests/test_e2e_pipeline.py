@@ -39,3 +39,10 @@ def test_e2e_pipeline_produces_artifacts(tmp_path):
     brief_md = (run_dir / "brief.md").read_text()
     assert "Weekly Priorities" in brief_md
     assert "Revenue" in brief_md
+
+    if manifest["signals_warn_count"] > 0:
+        assert "Categories affected:" in brief_md
+        assert "By category:" in brief_md
+
+    if manifest["signals_warn_count"] > 1:
+        assert "Priority signals:" in brief_md

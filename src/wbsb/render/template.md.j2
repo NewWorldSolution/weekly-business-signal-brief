@@ -11,9 +11,22 @@
 
 ## Weekly Priorities
 
-- {{ warn_count }} WARN signal{{ 's' if warn_count != 1 else '' }}
-- {{ info_count }} INFO signal{{ 's' if info_count != 1 else '' }}
-- Top issue: {% if top_warn %}{{ top_warn.label }}{% else %}No critical alerts this week{% endif %}
+- {{ warn_count }} WARN · {{ info_count }} INFO
+{% if warn_count > 0 %}
+- Categories affected: {{ severity_by_category.keys() | join(' · ') }}
+- Top issue: {{ top_warn.label }} ({{ category_labels.get(top_warn.category, top_warn.category) }})
+
+**Priority signals:**
+{% for s in top_signals %}
+- {{ s.severity }}: {{ s.label }} — {{ category_labels.get(s.category, s.category) }}
+{% endfor %}
+**By category:**
+{% for cat_label, count in severity_by_category.items() %}
+- {{ cat_label }}: {{ count }} WARN
+{% endfor %}
+{% else %}
+- No critical alerts this week
+{% endif %}
 
 ---
 
