@@ -94,7 +94,7 @@ class AdapterLLMResult(BaseModel):
     Task I4-3 will map or replace this with the shared model.
     """
 
-    executive_summary: str
+    executive_summary: str = ""
     signal_narratives: AdapterSignalNarratives = Field(
         default_factory=AdapterSignalNarratives
     )
@@ -103,6 +103,11 @@ class AdapterLLMResult(BaseModel):
     fallback: bool = False
     fallback_reason: str = ""
     token_usage: dict[str, int] = Field(default_factory=dict)
+    # Iteration 5 section-based fields — all optional for backward compatibility
+    situation: str | None = None
+    key_story: str | None = None
+    group_narratives: dict[str, str] | None = None
+    watch_signals: list[dict[str, str]] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -408,10 +413,15 @@ def validate_response(
         logger.warning("LLM response failed schema validation: %s", exc)
         return None
 
-    # Step 3: executive_summary length check
+    # Step 3: executive_summary length / presence check.
+    # For I5 responses, situation replaces executive_summary — allow empty summary
+    # only when situation is present and non-empty.
     if not result.executive_summary.strip():
-        logger.warning("LLM executive_summary is empty.")
-        return None
+        if not (result.situation and result.situation.strip()):
+            logger.warning(
+                "LLM executive_summary is empty and situation field is absent."
+            )
+            return None
     if len(result.executive_summary) > _EXECUTIVE_SUMMARY_MAX_CHARS:
         logger.warning(
             "LLM executive_summary too long (%d chars, max %d).",
@@ -419,6 +429,16 @@ def validate_response(
             _EXECUTIVE_SUMMARY_MAX_CHARS,
         )
         return None
+
+    # Step 3b: validate watch_signals structure if present
+    if result.watch_signals is not None:
+        for i, entry in enumerate(result.watch_signals):
+            if "metric_or_signal" not in entry or "observation" not in entry:
+                logger.warning(
+                    "LLM watch_signals entry %d missing required keys; field rejected.", i
+                )
+                result = result.model_copy(update={"watch_signals": None})
+                break
 
     # Step 4: for full mode, strip unknown rule_ids
     if mode == "full" and result.signal_narratives.narratives:

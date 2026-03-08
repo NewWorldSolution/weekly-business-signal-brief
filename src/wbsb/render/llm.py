@@ -29,6 +29,10 @@ def _adapter_to_domain(adapter_result: llm_adapter.AdapterLLMResult) -> LLMResul
         fallback=adapter_result.fallback,
         fallback_reason=adapter_result.fallback_reason,
         token_usage=adapter_result.token_usage,
+        situation=adapter_result.situation,
+        key_story=adapter_result.key_story,
+        group_narratives=adapter_result.group_narratives,
+        watch_signals=adapter_result.watch_signals,
     )
 
 

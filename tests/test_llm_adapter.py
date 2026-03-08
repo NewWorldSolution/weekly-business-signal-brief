@@ -497,6 +497,128 @@ class TestResponseValidation:
 
 
 # ---------------------------------------------------------------------------
+# D2. I5 schema extensions
+# ---------------------------------------------------------------------------
+
+
+class TestI5SchemaExtensions:
+    """Tests for Iteration 5 optional fields in AdapterLLMResult / validate_response."""
+
+    def test_old_i4_response_still_passes(self):
+        """Backward compatibility: a valid I4 response (executive_summary only) still validates."""
+        raw = json.dumps({
+            "executive_summary": "Revenue declined 20% this week.",
+            "signal_narratives": {"A1": "Revenue dropped."},
+        })
+        result = validate_response(raw, "full", expected_rule_ids=["A1"])
+        assert result is not None
+        assert result.executive_summary == "Revenue declined 20% this week."
+        assert result.situation is None
+        assert result.key_story is None
+        assert result.group_narratives is None
+        assert result.watch_signals is None
+
+    def test_i5_situation_field_accepted(self):
+        """I5 responses with situation field are accepted."""
+        raw = json.dumps({
+            "executive_summary": "Revenue declined 20% this week.",
+            "situation": "Revenue contraction with rising CAC.",
+            "signal_narratives": {"A1": "Revenue dropped."},
+        })
+        result = validate_response(raw, "full", expected_rule_ids=["A1"])
+        assert result is not None
+        assert result.situation == "Revenue contraction with rising CAC."
+
+    def test_i5_key_story_field_accepted(self):
+        raw = json.dumps({
+            "executive_summary": "Revenue declined.",
+            "key_story": "CAC spike is the root driver this week.",
+            "signal_narratives": {},
+        })
+        result = validate_response(raw, "summary", expected_rule_ids=[])
+        assert result is not None
+        assert result.key_story == "CAC spike is the root driver this week."
+
+    def test_i5_group_narratives_accepted(self):
+        raw = json.dumps({
+            "executive_summary": "Revenue declined.",
+            "group_narratives": {
+                "Revenue": "Revenue category saw a 25% decline.",
+                "Acquisition": "CAC rose 60%.",
+            },
+            "signal_narratives": {},
+        })
+        result = validate_response(raw, "full", expected_rule_ids=[])
+        assert result is not None
+        assert result.group_narratives is not None
+        assert result.group_narratives["Revenue"] == "Revenue category saw a 25% decline."
+
+    def test_i5_watch_signals_valid_structure_accepted(self):
+        raw = json.dumps({
+            "executive_summary": "Revenue declined.",
+            "watch_signals": [
+                {
+                    "metric_or_signal": "CAC (Paid)",
+                    "observation": "CAC rising but within threshold.",
+                },
+                {"metric_or_signal": "Total Bookings", "observation": "Volume recovering."},
+            ],
+            "signal_narratives": {},
+        })
+        result = validate_response(raw, "full", expected_rule_ids=[])
+        assert result is not None
+        assert result.watch_signals is not None
+        assert len(result.watch_signals) == 2
+        assert result.watch_signals[0]["metric_or_signal"] == "CAC (Paid)"
+
+    def test_i5_watch_signals_missing_required_key_rejected(self):
+        """watch_signals entry missing 'observation' key causes the whole field to be rejected."""
+        raw = json.dumps({
+            "executive_summary": "Revenue declined.",
+            "watch_signals": [
+                {"metric_or_signal": "CAC (Paid)"},  # missing 'observation'
+            ],
+            "signal_narratives": {},
+        })
+        result = validate_response(raw, "full", expected_rule_ids=[])
+        assert result is not None  # overall response still valid
+        assert result.watch_signals is None  # but watch_signals field is cleared
+
+    def test_i5_watch_signals_missing_metric_key_rejected(self):
+        """watch_signals entry missing 'metric_or_signal' key causes field to be rejected."""
+        raw = json.dumps({
+            "executive_summary": "Revenue declined.",
+            "watch_signals": [
+                {"observation": "Something to watch."},  # missing 'metric_or_signal'
+            ],
+            "signal_narratives": {},
+        })
+        result = validate_response(raw, "full", expected_rule_ids=[])
+        assert result is not None
+        assert result.watch_signals is None
+
+    def test_situation_replaces_executive_summary_when_summary_empty(self):
+        """I5 response with empty executive_summary is valid when situation is present."""
+        raw = json.dumps({
+            "executive_summary": "",
+            "situation": "Revenue contraction across all categories.",
+            "signal_narratives": {},
+        })
+        result = validate_response(raw, "full", expected_rule_ids=[])
+        assert result is not None
+        assert result.situation == "Revenue contraction across all categories."
+
+    def test_empty_summary_and_no_situation_still_returns_none(self):
+        """Empty executive_summary with no situation field must still fail."""
+        raw = json.dumps({
+            "executive_summary": "   ",
+            "signal_narratives": {},
+        })
+        result = validate_response(raw, "full", expected_rule_ids=[])
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
 # E. generate() behavior
 # ---------------------------------------------------------------------------
 
