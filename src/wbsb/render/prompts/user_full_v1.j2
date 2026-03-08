@@ -1,0 +1,50 @@
+WEEKLY ANALYTICS REPORT — FULL MODE
+Generated: {{ generated_at }}
+Reporting period: {{ current_week_start }} to {{ current_week_end }}
+Previous period:  {{ previous_week_start }} to {{ previous_week_end }}
+
+SIGNAL COUNTS
+- WARN signals: {{ warn_count }}
+- INFO signals: {{ info_count }}
+
+WARN SIGNALS BY CATEGORY
+{% if severity_by_category %}
+{% for category_label, count in severity_by_category.items() %}
+- {{ category_label }}: {{ count }} warning(s)
+{% endfor %}
+{% else %}
+- No WARN-level signals this week.
+{% endif %}
+
+ALL SIGNALS (for narrative enrichment)
+{% if all_signals %}
+{% for sig in all_signals %}
+Signal {{ loop.index }}:
+  rule_id: {{ sig.rule_id }}
+  label: {{ sig.label }}
+  category: {{ sig.category_display }}
+  severity: {{ sig.severity }}
+  metric: {{ sig.metric_name }}
+  direction: {{ sig.direction }}
+  deterministic_narrative: {{ sig.deterministic_narrative }}
+{% if sig.delta_pct is not none %}  delta_pct: {{ "%.1f"|format(sig.delta_pct * 100) }}%
+{% endif %}
+{% if sig.delta_abs is not none %}  delta_abs: {{ sig.delta_abs }}
+{% endif %}
+{% if sig.current_value is not none %}  current_value: {{ sig.current_value }}
+{% endif %}
+{% if sig.previous_value is not none %}  previous_value: {{ sig.previous_value }}
+{% endif %}
+{% if sig.threshold is not none %}  threshold: {{ sig.threshold }}
+{% endif %}
+{% endfor %}
+{% else %}
+No signals to report.
+{% endif %}
+
+RULE IDS IN PAYLOAD: {{ rule_ids | join(", ") }}
+
+INSTRUCTION:
+1. Write a 2-4 sentence executive summary based ONLY on the signals above.
+2. For each rule_id in the payload, write one concise business-readable sentence describing that signal's impact. Use ONLY rule_ids from the list above.
+Respond with valid JSON only.
