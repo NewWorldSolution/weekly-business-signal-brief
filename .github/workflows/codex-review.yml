@@ -38,13 +38,11 @@ jobs:
         run: |
           pip install --quiet openai
 
-          PR="${ISSUE_NUMBER:-$PR_NUMBER}"
-
           python3 - <<'PYEOF'
           import os, subprocess
           from openai import OpenAI
 
-          pr = os.environ["PR"]
+          pr = os.environ.get("ISSUE_NUMBER") or os.environ.get("PR_NUMBER")
           repo = os.environ["GH_REPO"]
 
           diff = subprocess.check_output(
