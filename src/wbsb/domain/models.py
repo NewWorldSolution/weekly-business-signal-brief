@@ -91,6 +91,24 @@ class Findings(BaseModel):
     audit: list[AuditEvent]
 
 
+class LLMSignalNarratives(BaseModel):
+    """Optional LLM-authored narratives keyed by signal identifier."""
+
+    narratives: dict[str, str] = Field(default_factory=dict)
+
+
+class LLMResult(BaseModel):
+    """Structured optional LLM output for report overlay and observability."""
+
+    executive_summary: str = ""
+    signal_narratives: LLMSignalNarratives = Field(default_factory=LLMSignalNarratives)
+    model: str = ""
+    prompt_version: str = ""
+    fallback: bool = False
+    fallback_reason: str = ""
+    token_usage: dict[str, int] = Field(default_factory=dict)
+
+
 class Manifest(BaseModel):
     """Run manifest with hashes and timings."""
 
@@ -107,3 +125,10 @@ class Manifest(BaseModel):
     audit_events_count: int = 0
     render_mode: str = "off"
     config_version: str = ""
+    llm_status: str = "off"
+    llm_mode: str = ""
+    llm_provider: str = ""
+    llm_model: str = ""
+    llm_prompt_version: str = ""
+    llm_fallback_reason: str = ""
+    llm_token_usage: dict[str, int] = Field(default_factory=dict)

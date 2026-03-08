@@ -10,6 +10,8 @@ from pydantic import ValidationError
 from wbsb.domain.models import (
     AuditEvent,
     Findings,
+    LLMResult,
+    LLMSignalNarratives,
     Manifest,
     MetricResult,
     Periods,
@@ -114,6 +116,49 @@ def test_manifest_valid():
     )
     assert m.elapsed_seconds == 1.23
     assert "findings.json" in m.artifacts
+
+
+def test_manifest_defaults_include_llm_fields():
+    m = Manifest(
+        run_id="test-run-001",
+        generated_at=datetime.now(UTC),
+        input_file="sample.csv",
+        input_sha256="abc123",
+        config_sha256="def456",
+        elapsed_seconds=0.5,
+    )
+    assert m.llm_status == "off"
+    assert m.llm_mode == ""
+    assert m.llm_provider == ""
+    assert m.llm_model == ""
+    assert m.llm_prompt_version == ""
+    assert m.llm_fallback_reason == ""
+    assert m.llm_token_usage == {}
+
+
+def test_llm_signal_narratives_serialization():
+    narratives = LLMSignalNarratives(narratives={"A1": "Revenue trend is stabilizing."})
+    assert narratives.model_dump() == {"narratives": {"A1": "Revenue trend is stabilizing."}}
+
+
+def test_llm_result_serialization():
+    result = LLMResult(
+        executive_summary="Revenue softened week over week.",
+        signal_narratives=LLMSignalNarratives(narratives={"A1": "net_revenue declined"}),
+        model="gpt-test",
+        prompt_version="v1",
+        fallback=True,
+        fallback_reason="timeout",
+        token_usage={"prompt_tokens": 111, "completion_tokens": 222},
+    )
+    data = result.model_dump()
+    assert data["executive_summary"] == "Revenue softened week over week."
+    assert data["signal_narratives"]["narratives"]["A1"] == "net_revenue declined"
+    assert data["model"] == "gpt-test"
+    assert data["prompt_version"] == "v1"
+    assert data["fallback"] is True
+    assert data["fallback_reason"] == "timeout"
+    assert data["token_usage"] == {"prompt_tokens": 111, "completion_tokens": 222}
 
 
 def test_audit_event_minimal():
