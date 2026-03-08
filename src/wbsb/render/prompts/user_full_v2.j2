@@ -1,0 +1,74 @@
+WEEKLY ANALYTICS REPORT — FULL MODE
+Generated: {{ generated_at }}
+Reporting period: {{ current_week_start }} to {{ current_week_end }}
+Previous period:  {{ previous_week_start }} to {{ previous_week_end }}
+
+DOMINANT CLUSTER FACTS
+- dominant_cluster_exists: {{ dominant_cluster_exists }}
+- dominant_cluster_category: {{ dominant_cluster_category if dominant_cluster_category else "none" }}
+
+SIGNAL CLUSTER SUMMARY
+{% if category_health_summary %}
+{% for cat in category_health_summary %}
+- {{ cat.category_display }}: {{ cat.signal_count }} signal(s), WARN={{ cat.warn_count }}, direction={{ cat.directional_consistency }}
+{% endfor %}
+{% else %}
+- No signal clusters available.
+{% endif %}
+
+BUSINESS MECHANISM CHAINS
+{% for chain in business_mechanism_chains %}
+{{ chain.title }}
+{% if chain.elements %}
+{% for el in chain.elements %}
+- {{ el.metric_name }} ({{ el.metric_id }}): current={{ el.current_value }}, previous={{ el.previous_value }}, delta_abs={{ el.delta_abs }}, delta_pct={{ el.delta_pct }}, direction={{ el.direction }}
+{% endfor %}
+{% else %}
+- No chain metrics available for this chain.
+{% endif %}
+{% if chain.missing_metric_ids %}- Missing metrics: {{ chain.missing_metric_ids | join(", ") }}
+{% endif %}
+{% endfor %}
+
+SIGNALS GROUPED BY CATEGORY
+{% if grouped_signals %}
+{% for group in grouped_signals %}
+{{ group.category_display }} ({{ group.signals | length }} signal(s))
+{% for sig in group.signals %}
+- Signal {{ sig.rule_id }}:
+  label: {{ sig.label }}
+  category: {{ sig.category_display }}
+  severity: {{ sig.severity }}
+  metric: {{ sig.metric_name }} ({{ sig.metric_id }})
+  direction: {{ sig.direction }}
+  deterministic_narrative: {{ sig.deterministic_narrative }}
+{% if sig.delta_pct is not none %}  delta_pct: {{ "%.1f"|format(sig.delta_pct * 100) }}%
+{% endif %}
+{% if sig.delta_abs is not none %}  delta_abs: {{ sig.delta_abs }}
+{% endif %}
+{% if sig.current_value is not none %}  current_value: {{ sig.current_value }}
+{% endif %}
+{% if sig.previous_value is not none %}  previous_value: {{ sig.previous_value }}
+{% endif %}
+{% if sig.threshold is not none %}  threshold: {{ sig.threshold }}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% else %}
+No signals to report.
+{% endif %}
+
+{% if relationship_hints %}
+RELATIONSHIP HINTS (DESCRIPTIVE ONLY)
+{% for hint in relationship_hints %}
+- {{ hint }}
+{% endfor %}
+{% endif %}
+
+RULE IDS IN PAYLOAD: {{ rule_ids | join(", ") }}
+METRIC IDS IN PAYLOAD: {{ metric_ids | join(", ") }}
+
+INSTRUCTION:
+1. Write a 2-4 sentence executive summary based ONLY on the deterministic facts above.
+2. For each rule_id in the payload, write one concise business-readable sentence describing that signal's impact. Use ONLY rule_ids from the list above.
+Respond with valid JSON only.
