@@ -56,14 +56,19 @@ def _extract_llm_signal_narratives(llm_result: LLMResult | None) -> dict[str, st
 
 
 def _extract_group_narratives(llm_result: LLMResult | None) -> dict[str, str]:
-    """Return non-empty LLM category narratives keyed by category."""
+    """Return non-empty LLM category narratives keyed by internal category key.
+
+    Normalizes LLM-returned keys to internal snake_case format so that
+    display-name keys (e.g. "Financial Health") match internal keys
+    (e.g. "financial_health") used by signal.category in findings.
+    """
     if llm_result is None:
         return {}
     group_narratives = getattr(llm_result, "group_narratives", None)
     if not isinstance(group_narratives, dict):
         return {}
     return {
-        category: narrative.strip()
+        category.lower().replace(" ", "_"): narrative.strip()
         for category, narrative in group_narratives.items()
         if isinstance(narrative, str) and narrative.strip()
     }
