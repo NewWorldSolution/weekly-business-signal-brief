@@ -416,17 +416,96 @@ After this task merges, the following will be available for `{{BLOCKS}}`:
 ## Execution Workflow
 <!-- [BOILERPLATE] — do not change this section -->
 
-Follow this sequence exactly:
+Follow this sequence exactly. Do not skip or reorder steps.
 
-1. **Read first.** Read all files listed in "Files to Read Before Starting". Do not write a line until you understand the existing code.
-2. **Plan before multi-file changes.** If this task touches more than 2 files, enter Plan Mode and present the plan before implementing.
-3. **Confirm allowed files.** Cross-check every file you intend to touch against the "Allowed Files" list. If a file is not on the list, stop and ask.
-4. **Implement.** Write code that satisfies all acceptance criteria and test cases.
-5. **Test.** Run `pytest`. All tests must pass. Do not submit if any test fails.
-6. **Lint.** Run `ruff check .`. Must be clean. Fix all issues before committing.
-7. **Commit.** Use the commit format below. One commit per logical change; do not squash unrelated changes.
-8. **Push.** Push the feature branch. Open a PR.
-9. **Do not merge.** Merging is a human decision.
+### Step 0 — Branch setup (before anything else)
+
+```bash
+# Confirm you are on the correct base branch and it is up to date
+git checkout main
+git pull origin main
+
+# Confirm the working tree is clean before branching
+git status
+# Expected: "nothing to commit, working tree clean"
+# If not clean: stop and resolve before continuing
+
+# Create and switch to the feature branch for this task
+git checkout -b {{FEATURE_BRANCH}}
+
+# Confirm you are on the right branch
+git branch --show-current
+# Expected: {{FEATURE_BRANCH}}
+```
+
+If the branch already exists (e.g. you are resuming work):
+```bash
+git checkout {{FEATURE_BRANCH}}
+git status
+# Confirm no unexpected changes before resuming
+```
+
+### Step 1 — Verify the baseline
+
+Before writing a single line of code, confirm the existing suite is green:
+
+```bash
+pytest
+# Expected: all {{TEST_COUNT}}+ tests passing, exit code 0
+
+ruff check .
+# Expected: no issues, exit code 0
+```
+
+If either command fails, **stop**. Do not proceed until the baseline is clean. The failure is not caused by this task — it is a pre-existing issue that must be resolved or reported first.
+
+### Step 2 — Read before writing
+
+Read all files listed in "Files to Read Before Starting" in the specified order. Do not write a line of implementation until you understand the existing code those files represent.
+
+### Step 3 — Plan before multi-file changes
+
+If this task touches more than 2 files, enter Plan Mode and present the full plan (which files, what changes, in what order) before implementing. Wait for confirmation before proceeding.
+
+### Step 4 — Confirm allowed files
+
+Before editing any file, cross-check it against the "Allowed Files" list. If a file you need to touch is not on that list, **stop and ask** — do not modify it and explain later.
+
+### Step 5 — Implement
+
+Write code that satisfies all acceptance criteria and handles all edge cases listed above.
+
+### Step 6 — Test and lint
+
+```bash
+pytest
+# Must pass: all prior tests + all new tests. Zero failures permitted.
+
+ruff check .
+# Must be clean. Fix all issues before committing.
+```
+
+Do not submit if either command fails.
+
+### Step 7 — Verify scope
+
+```bash
+git diff --name-only main
+```
+
+Every file in the output must appear in the "Allowed Files" list. If any unexpected file appears, review and revert it before committing.
+
+### Step 8 — Commit
+
+Use the commit message format defined below. One commit per logical unit of work.
+
+### Step 9 — Push and open PR
+
+```bash
+git push -u origin {{FEATURE_BRANCH}}
+```
+
+Open a PR from `{{FEATURE_BRANCH}}` into `main`. Do not merge — merging is a human decision.
 
 ---
 
