@@ -1,8 +1,9 @@
-"""Tests for wbsb.history.store — run index persistence and HistoryReader."""
+"""Tests for wbsb.history.store and wbsb.history.trends."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -12,6 +13,7 @@ from wbsb.history.store import (
     derive_dataset_key,
     register_run,
 )
+from wbsb.history.trends import TrendResult, compute_trends
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -241,3 +243,158 @@ def test_history_reader_before_week_start_filter(tmp_path):
     # Only runs before 2026-03-03 should be returned
     assert all(r[0] < "2026-03-03" for r in results)
     assert len(results) == 2
+
+
+# ---------------------------------------------------------------------------
+# compute_trends — deterministic trend classification (I6-4)
+# ---------------------------------------------------------------------------
+
+
+def _mock_reader(values: list[float]) -> MagicMock:
+    """Build a mock HistoryReader returning the given values as history."""
+    reader = MagicMock()
+    reader.get_metric_history.return_value = [
+        (f"2026-0{i + 1}-01", v) for i, v in enumerate(values)
+    ]
+    return reader
+
+
+def _trend(values: list[float], **kwargs) -> TrendResult:
+    """Run compute_trends for a single metric and return its result."""
+    return compute_trends(_mock_reader(values), ["m"], **kwargs)["m"]
+
+
+def test_trend_insufficient_history_no_points():
+    t = _trend([])
+    assert t["trend_label"] == "insufficient_history"
+    assert t["weeks_consecutive"] == 0
+    assert t["baseline_delta_pct"] is None
+    assert t["direction_sequence"] == []
+
+
+def test_trend_insufficient_history_one_point():
+    t = _trend([100.0])
+    assert t["trend_label"] == "insufficient_history"
+    assert t["baseline_delta_pct"] is None
+
+
+def test_trend_stable():
+    t = _trend([100.0, 101.0, 100.5, 101.0])
+    assert t["trend_label"] == "stable"
+    assert t["weeks_consecutive"] == 0
+
+
+def test_trend_stable_requires_min_weeks():
+    # Only 2 points — not enough for stable (stable_min_weeks=3)
+    t = _trend([100.0, 101.0])
+    assert t["trend_label"] != "stable"
+
+
+def test_trend_rising():
+    t = _trend([100.0, 105.0, 110.25, 115.76])
+    assert t["trend_label"] == "rising"
+    assert t["weeks_consecutive"] >= 2
+
+
+def test_trend_rising_weeks_consecutive():
+    t = _trend([100.0, 105.0, 110.25, 115.76])
+    assert t["weeks_consecutive"] == 3
+
+
+def test_trend_falling():
+    t = _trend([100.0, 95.0, 90.0, 85.0])
+    assert t["trend_label"] == "falling"
+    assert t["weeks_consecutive"] >= 2
+
+
+def test_trend_recovering():
+    t = _trend([100.0, 90.0, 85.0, 91.0])
+    assert t["trend_label"] == "recovering"
+    assert t["weeks_consecutive"] == 1
+
+
+def test_trend_volatile():
+    t = _trend([100.0, 110.0, 95.0, 108.0, 90.0])
+    assert t["trend_label"] == "volatile"
+    assert t["weeks_consecutive"] == 0
+
+
+def test_trend_flat_steps_do_not_break_rising():
+    # up, flat, up → non-flat sequence is ["up", "up"] → rising
+    t = _trend([100.0, 106.0, 107.0, 114.0])
+    assert t["trend_label"] == "rising"
+
+
+def test_trend_respects_config_thresholds():
+    # ~1% changes are clearly within the ±2% stable_band_pct from config
+    t = _trend([100.0, 101.0, 102.01, 103.03])
+    assert t["trend_label"] == "stable"
+
+
+def test_compute_trends_empty_metric_list():
+    reader = MagicMock()
+    result = compute_trends(reader, [])
+    assert result == {}
+    reader.get_metric_history.assert_not_called()
+
+
+def test_direction_sequence_generation():
+    # 100 → 110 (+10%, up), 110 → 100 (-9%, down) — oldest step first
+    t = _trend([100.0, 110.0, 100.0])
+    assert t["direction_sequence"] == ["up", "down"]
+
+
+def test_baseline_delta_pct_calculation():
+    # mean=110, current=120 → (120-110)/110
+    t = _trend([100.0, 110.0, 120.0])
+    assert t["baseline_delta_pct"] is not None
+    assert abs(t["baseline_delta_pct"] - (120.0 - 110.0) / 110.0) < 1e-9
+
+
+def test_insufficient_history_baseline_is_none():
+    t = _trend([100.0])
+    assert t["baseline_delta_pct"] is None
+
+
+def test_weeks_consecutive_zero_for_stable():
+    t = _trend([100.0, 101.0, 100.5, 101.0])
+    if t["trend_label"] == "stable":
+        assert t["weeks_consecutive"] == 0
+
+
+def test_weeks_consecutive_zero_for_volatile():
+    t = _trend([100.0, 110.0, 95.0, 108.0, 90.0])
+    assert t["trend_label"] == "volatile"
+    assert t["weeks_consecutive"] == 0
+
+
+def test_baseline_average_zero():
+    # Values averaging to 0 — baseline_delta_pct must be None, no exception
+    t = _trend([-50.0, 0.0, 50.0])
+    assert t["baseline_delta_pct"] is None
+    assert t["trend_label"] in {
+        "rising", "falling", "stable", "recovering", "volatile", "insufficient_history"
+    }
+
+
+def test_history_gap_between_weeks():
+    # Non-contiguous week timestamps must not break classification
+    reader = MagicMock()
+    reader.get_metric_history.return_value = [
+        ("2026-01-01", 100.0),
+        ("2026-01-15", 110.0),
+        ("2026-02-01", 120.0),
+    ]
+    result = compute_trends(reader, ["m"])
+    t = result["m"]
+    assert t["trend_label"] != "insufficient_history"
+    assert t["direction_sequence"] == ["up", "up"]
+
+
+def test_history_contains_missing_metric():
+    # Metric absent from all historical findings → reader returns []
+    reader = MagicMock()
+    reader.get_metric_history.return_value = []
+    result = compute_trends(reader, ["absent_metric"])
+    assert result["absent_metric"]["trend_label"] == "insufficient_history"
+    assert result["absent_metric"]["baseline_delta_pct"] is None
