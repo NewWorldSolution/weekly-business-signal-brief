@@ -64,10 +64,11 @@ CSV/XLSX → Loader → Validator → Metrics → Deltas → Rules Engine → Fi
 | Title | {{TASK_TITLE}} |
 | Iteration | {{ITERATION}} |
 | Owner | {{OWNER}} |
+| Iteration branch | `feature/{{ITERATION_BRANCH}}` |
 | Feature branch | `{{FEATURE_BRANCH}}` |
 | Depends on | {{DEPENDS_ON}} |
 | Blocks | {{BLOCKS}} |
-| PR scope | One PR. One task. Do not combine with adjacent tasks. |
+| PR scope | One PR into `feature/{{ITERATION_BRANCH}}`. Do not combine tasks. Do not PR to `main`. |
 
 ---
 
@@ -420,10 +421,19 @@ Follow this sequence exactly. Do not skip or reorder steps.
 
 ### Step 0 — Branch setup (before anything else)
 
+This project uses a **per-iteration integration branch**. Task branches are created from the
+iteration branch — not from `main` — and PRs target the iteration branch.
+
+```
+main
+ └── feature/{{ITERATION_BRANCH}}     ← base for all tasks in this iteration
+      └── {{FEATURE_BRANCH}}          ← this task's branch
+```
+
 ```bash
-# Confirm you are on the correct base branch and it is up to date
-git checkout main
-git pull origin main
+# Start from the iteration integration branch, not main
+git checkout feature/{{ITERATION_BRANCH}}
+git pull origin feature/{{ITERATION_BRANCH}}
 
 # Confirm the working tree is clean before branching
 git status
@@ -490,7 +500,7 @@ Do not submit if either command fails.
 ### Step 7 — Verify scope
 
 ```bash
-git diff --name-only main
+git diff --name-only feature/{{ITERATION_BRANCH}}
 ```
 
 Every file in the output must appear in the "Allowed Files" list. If any unexpected file appears, review and revert it before committing.
@@ -505,7 +515,10 @@ Use the commit message format defined below. One commit per logical unit of work
 git push -u origin {{FEATURE_BRANCH}}
 ```
 
-Open a PR from `{{FEATURE_BRANCH}}` into `main`. Do not merge — merging is a human decision.
+Open a PR from `{{FEATURE_BRANCH}}` into `feature/{{ITERATION_BRANCH}}` — **not into `main`**.
+Do not merge — merging is a human decision.
+
+`main` is only updated when the full iteration is complete and has passed the architecture review.
 
 ---
 

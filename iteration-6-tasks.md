@@ -1,26 +1,49 @@
 # Iteration 6 — Historical Memory & Trend Awareness
 ## Detailed Task Plan
 
-**Status:** I6-0 complete. I6-1 is next.
-**Baseline:** 217 tests passing, ruff clean, all I5 branches merged.
+**Status:** I6-1 complete and merged into `feature/iteration-6`. I6-2 is next.
+**Baseline:** 217 tests passing, ruff clean.
+
+---
+
+## Branching Strategy
+
+Iteration 6 uses a **dedicated integration branch** rather than merging tasks directly to `main`.
+
+```
+main
+ └── feature/iteration-6          ← iteration integration branch
+      ├── feature/i6-1-history-config     (merged ✅)
+      ├── feature/i6-2-history-store      (next)
+      ├── feature/i6-3-pipeline-integration
+      ├── feature/i6-4-trend-engine
+      ├── feature/i6-5-llm-trend-context
+      └── feature/i6-6-prompt-template
+```
+
+**Rules:**
+- Every task branch is created from `feature/iteration-6` (not from `main`)
+- Every task PR targets `feature/iteration-6` (not `main`)
+- `feature/iteration-6` is only merged into `main` once the full iteration passes the I6-7 architecture review and I6-8 cleanup
+- `main` stays stable and production-ready throughout the entire iteration
 
 ---
 
 ## Execution Order
 
 ```
-I6-0  [Claude]   Docs update                    ✅ DONE
-I6-1  [Codex]    Config — history: section       → unblocks all coding
+I6-0  [Claude]   Docs update                    ✅ DONE (merged to main)
+I6-1  [Codex]    Config — history: section      ✅ DONE (merged to feature/iteration-6)
 I6-2  [Claude]   History store + HistoryReader   → depends on I6-1
 I6-3  [Claude]   Pipeline integration            → depends on I6-2   ┐ can run
 I6-4  [Claude]   Trend engine                    → depends on I6-2   ┘ in parallel
 I6-5  [Claude]   LLM adapter extension           → depends on I6-3 + I6-4
 I6-6  [Codex]    Prompt template update          → depends on I6-5
 I6-7  [You]      Architecture review             → depends on I6-6
-I6-8  [Claude]   Final cleanup pass              → depends on I6-7
+I6-8  [Claude]   Final cleanup + merge to main   → depends on I6-7
 ```
 
-**One task = one PR. Never combine tasks in a single PR unless explicitly approved.**
+**One task = one PR into `feature/iteration-6`. Never combine tasks. Never PR directly to `main`.**
 
 ---
 
