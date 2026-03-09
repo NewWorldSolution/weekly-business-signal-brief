@@ -69,6 +69,37 @@ RULE IDS IN PAYLOAD: {{ rule_ids | join(", ") }}
 METRIC IDS IN PAYLOAD: {{ metric_ids | join(", ") }}
 
 INSTRUCTION:
-1. Write a 2-4 sentence executive summary based ONLY on the deterministic facts above.
-2. For each rule_id in the payload, write one concise business-readable sentence describing that signal's impact. Use ONLY rule_ids from the list above.
-Respond with valid JSON only.
+Return ONLY valid JSON with this exact section-based contract:
+{
+  "situation": "string",
+  "key_story": "string or null",
+  "group_narratives": {
+    "acquisition": "string",
+    "financial_health": "string",
+    "operations": "string",
+    "revenue": "string"
+  },
+  "signal_narratives": {
+    "RULE_ID": "string"
+  },
+  "watch_signals": [
+    {
+      "metric_or_signal": "string",
+      "observation": "string"
+    }
+  ]
+}
+
+SECTION RULES:
+1. situation: 2-3 sentences, operator-level, no signal IDs, no metric IDs.
+2. key_story: only when dominant_cluster_exists=true; otherwise set key_story to null.
+3. group_narratives: one sentence per category that appears in this payload.
+4. signal_narratives: one concise sentence per payload rule_id; do not add extra rule_ids.
+5. watch_signals: maximum 2 entries; observation only (never recommendations).
+
+CONSTRAINTS:
+- Use only deterministic payload evidence.
+- Do not invent numbers.
+- Do not use external causes or external context.
+- Do not provide business advice.
+- Do not include hidden reasoning.

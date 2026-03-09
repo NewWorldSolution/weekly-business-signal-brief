@@ -518,6 +518,7 @@ class TestSystemPromptRendering:
         prompt = render_system_prompt("full")
         assert isinstance(prompt, str)
         assert len(prompt) > 50
+        assert "structured weekly performance brief" in prompt.lower()
 
     def test_system_summary_prompt_contains_constraint_language(self):
         prompt = render_system_prompt("summary")
@@ -610,6 +611,8 @@ class TestUserPromptRendering:
         assert "SIGNAL CLUSTER SUMMARY" in prompt
         assert "BUSINESS MECHANISM CHAINS" in prompt
         assert "SIGNALS GROUPED BY CATEGORY" in prompt
+        assert '"situation"' in prompt
+        assert '"key_story"' in prompt
 
     def test_user_prompt_contains_rule_ids(self):
         ctx = _make_ctx(signals=[_make_signal(rule_id="REV_DROP")])
@@ -650,7 +653,12 @@ class TestUserPromptRendering:
 class TestResponseValidation:
     def test_valid_summary_response_parses(self):
         raw = _make_summary_response("Revenue declined 20% this week against the prior period.")
-        result = validate_response(raw, "summary", expected_rule_ids=["A1"])
+        result = validate_response(
+            raw,
+            "summary",
+            expected_rule_ids=["A1"],
+            expected_metric_ids=["net_revenue"],
+        )
         assert result is not None
         assert isinstance(result, AdapterLLMResult)
         assert "Revenue declined" in result.executive_summary
@@ -660,7 +668,12 @@ class TestResponseValidation:
             "Revenue and leads both declined this week.",
             narratives={"A1": "Revenue dropped 20% driven by fewer new paid clients."},
         )
-        result = validate_response(raw, "full", expected_rule_ids=["A1"])
+        result = validate_response(
+            raw,
+            "full",
+            expected_rule_ids=["A1"],
+            expected_metric_ids=["net_revenue"],
+        )
         assert result is not None
         assert result.signal_narratives.narratives.get("A1") is not None
 
@@ -785,18 +798,110 @@ class TestI5SchemaExtensions:
             "executive_summary": "Revenue declined.",
             "watch_signals": [
                 {
-                    "metric_or_signal": "CAC (Paid)",
+                    "metric_or_signal": "cac_paid",
                     "observation": "CAC rising but within threshold.",
                 },
-                {"metric_or_signal": "Total Bookings", "observation": "Volume recovering."},
+                {"metric_or_signal": "A1", "observation": "Revenue trend remained weak."},
             ],
             "signal_narratives": {},
         })
-        result = validate_response(raw, "full", expected_rule_ids=[])
+        result = validate_response(
+            raw,
+            "full",
+            expected_rule_ids=["A1"],
+            expected_metric_ids=["cac_paid", "net_revenue"],
+        )
         assert result is not None
         assert result.watch_signals is not None
         assert len(result.watch_signals) == 2
-        assert result.watch_signals[0]["metric_or_signal"] == "CAC (Paid)"
+        assert result.watch_signals[0]["metric_or_signal"] == "cac_paid"
+
+    def test_i5_key_story_rejected_when_no_dominant_cluster(self):
+        raw = json.dumps({
+            "executive_summary": "Revenue declined.",
+            "situation": "Revenue and acquisition weakened this week.",
+            "key_story": "Acquisition cluster drove the week.",
+            "signal_narratives": {"A1": "Revenue declined week-over-week."},
+        })
+        result = validate_response(
+            raw,
+            "full",
+            expected_rule_ids=["A1"],
+            expected_metric_ids=["net_revenue"],
+            dominant_cluster_exists=False,
+        )
+        assert result is not None
+        assert result.key_story is None
+
+    def test_i5_watch_signals_forbidden_advice_verbs_rejected(self):
+        raw = json.dumps({
+            "executive_summary": "Revenue declined.",
+            "watch_signals": [
+                {"metric_or_signal": "A1", "observation": "You should review CAC next week."}
+            ],
+            "signal_narratives": {"A1": "Revenue declined week-over-week."},
+        })
+        result = validate_response(
+            raw,
+            "full",
+            expected_rule_ids=["A1"],
+            expected_metric_ids=["cac_paid"],
+        )
+        assert result is not None
+        assert result.watch_signals is None
+
+    def test_i5_watch_signals_invalid_reference_rejected(self):
+        raw = json.dumps({
+            "executive_summary": "Revenue declined.",
+            "watch_signals": [
+                {
+                    "metric_or_signal": "UNKNOWN_REF",
+                    "observation": "This moved downward week-over-week.",
+                }
+            ],
+            "signal_narratives": {"A1": "Revenue declined week-over-week."},
+        })
+        result = validate_response(
+            raw,
+            "full",
+            expected_rule_ids=["A1"],
+            expected_metric_ids=["net_revenue"],
+        )
+        assert result is not None
+        assert result.watch_signals is None
+
+    def test_i5_watch_signals_more_than_two_rejected(self):
+        raw = json.dumps({
+            "executive_summary": "Revenue declined.",
+            "watch_signals": [
+                {"metric_or_signal": "A1", "observation": "A1 moved down."},
+                {"metric_or_signal": "B1", "observation": "B1 moved up."},
+                {"metric_or_signal": "net_revenue", "observation": "Net revenue moved down."},
+            ],
+            "signal_narratives": {"A1": "Revenue declined week-over-week."},
+        })
+        result = validate_response(
+            raw,
+            "full",
+            expected_rule_ids=["A1", "B1"],
+            expected_metric_ids=["net_revenue"],
+        )
+        assert result is not None
+        assert result.watch_signals is None
+
+    def test_i5_group_narratives_wrong_type_rejected(self):
+        raw = json.dumps({
+            "executive_summary": "Revenue declined.",
+            "group_narratives": "not-an-object",
+            "signal_narratives": {"A1": "Revenue declined week-over-week."},
+        })
+        result = validate_response(
+            raw,
+            "full",
+            expected_rule_ids=["A1"],
+            expected_metric_ids=["net_revenue"],
+        )
+        assert result is None
 
     def test_i5_watch_signals_missing_required_key_rejected(self):
         """watch_signals entry missing 'observation' key causes the whole field to be rejected."""
@@ -877,7 +982,7 @@ class TestGenerateFunction:
         ))
         result = generate(ctx, mode="full", provider="anthropic", client=client)
         assert result is not None
-        assert result.prompt_version == "full_v1"
+        assert result.prompt_version == "full_v2"
 
     def test_success_sets_model_from_client(self):
         ctx = self._ctx_with_signal()

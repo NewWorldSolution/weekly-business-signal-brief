@@ -35,7 +35,7 @@ _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 # Prompt version constants derived from template filenames.
 PROMPT_VERSION_SUMMARY = "summary_v1"
-PROMPT_VERSION_FULL = "full_v1"
+PROMPT_VERSION_FULL = "full_v2"
 
 _PROMPT_VERSIONS = {
     "summary": PROMPT_VERSION_SUMMARY,
@@ -45,6 +45,21 @@ _PROMPT_VERSIONS = {
 _EXECUTIVE_SUMMARY_MAX_CHARS = 800
 _EXECUTIVE_SUMMARY_MIN_CHARS = 1
 _FULL_PROMPT_TEMPLATE = "user_full_v2.j2"
+_FULL_SYSTEM_TEMPLATE = "system_full_v2.j2"
+_FORBIDDEN_WATCH_OBSERVATION_TERMS = (
+    "recommend",
+    "should",
+    "need to",
+    "consider",
+    "review",
+    "adjust",
+    "increase",
+    "decrease",
+    "improve",
+    "fix",
+    "address",
+    "prioritize",
+)
 
 _CHAIN_DEFINITIONS: list[dict[str, Any]] = [
     {
@@ -515,7 +530,10 @@ def render_system_prompt(mode: str) -> str:
     if mode not in ("summary", "full"):
         raise ValueError(f"Unknown llm mode: {mode!r}. Expected 'summary' or 'full'.")
     env = _get_jinja_env()
-    template = env.get_template(f"system_{mode}_v1.j2")
+    if mode == "full":
+        template = env.get_template(_FULL_SYSTEM_TEMPLATE)
+    else:
+        template = env.get_template("system_summary_v1.j2")
     return template.render()
 
 
@@ -581,6 +599,8 @@ def validate_response(
     raw: str,
     mode: str,
     expected_rule_ids: list[str],
+    expected_metric_ids: list[str] | None = None,
+    dominant_cluster_exists: bool = True,
 ) -> AdapterLLMResult | None:
     """Parse and validate the raw LLM response string.
 
@@ -593,13 +613,16 @@ def validate_response(
     Args:
         raw: Raw string response from the LLM.
         mode: LLM mode — "summary" or "full".
-        expected_rule_ids: Rule IDs from the prompt input; used to validate narratives.
+        expected_rule_ids: Rule IDs from prompt input.
+        expected_metric_ids: Metric IDs from prompt input.
+        dominant_cluster_exists: Deterministic dominant cluster fact from prompt input.
 
     Returns:
         Validated AdapterLLMResult or None if validation fails.
     """
     # Step 0: sanitise — strip markdown code fences if the model added them.
     raw = _strip_markdown_fences(raw)
+    expected_metric_ids = expected_metric_ids or []
 
     # Step 1: parse JSON
     try:
@@ -639,12 +662,50 @@ def validate_response(
         )
         return None
 
-    # Step 3b: validate watch_signals structure if present
+    # Step 3b: key_story must be null/empty when no dominant cluster exists.
+    if not dominant_cluster_exists and result.key_story and result.key_story.strip():
+        logger.warning(
+            "LLM key_story provided despite dominant_cluster_exists=False; field rejected."
+        )
+        result = result.model_copy(update={"key_story": None})
+
+    # Step 3c: validate watch_signals structure and grounding if present.
     if result.watch_signals is not None:
+        if len(result.watch_signals) > 2:
+            logger.warning(
+                "LLM watch_signals has %d entries (>2); field rejected.",
+                len(result.watch_signals),
+            )
+            result = result.model_copy(update={"watch_signals": None})
+
+    if result.watch_signals is not None:
+        allowed_refs = set(expected_rule_ids) | set(expected_metric_ids)
         for i, entry in enumerate(result.watch_signals):
             if "metric_or_signal" not in entry or "observation" not in entry:
                 logger.warning(
                     "LLM watch_signals entry %d missing required keys; field rejected.", i
+                )
+                result = result.model_copy(update={"watch_signals": None})
+                break
+            ref = str(entry["metric_or_signal"])
+            observation = str(entry["observation"])
+            if ref not in allowed_refs:
+                logger.warning(
+                    "LLM watch_signals entry %d references unknown id %r; field rejected.",
+                    i,
+                    ref,
+                )
+                result = result.model_copy(update={"watch_signals": None})
+                break
+            lowered_observation = observation.lower()
+            if any(
+                term in lowered_observation
+                for term in _FORBIDDEN_WATCH_OBSERVATION_TERMS
+            ):
+                logger.warning(
+                    "LLM watch_signals entry %d contains forbidden advisory language; "
+                    "field rejected.",
+                    i,
                 )
                 result = result.model_copy(update={"watch_signals": None})
                 break
@@ -763,7 +824,13 @@ def generate(
         _log_fallback("api_error", str(exc))
         return None
 
-    result = validate_response(raw, mode, expected_rule_ids=prompt_inputs["rule_ids"])
+    result = validate_response(
+        raw,
+        mode,
+        expected_rule_ids=prompt_inputs["rule_ids"],
+        expected_metric_ids=prompt_inputs["metric_ids"],
+        dominant_cluster_exists=prompt_inputs["dominant_cluster_exists"],
+    )
     if result is None:
         return None
 
