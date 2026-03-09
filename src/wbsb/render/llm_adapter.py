@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from collections import Counter
 from json import JSONDecodeError
 from pathlib import Path
@@ -699,7 +700,7 @@ def validate_response(
                 break
             lowered_observation = observation.lower()
             if any(
-                term in lowered_observation
+                re.search(r"\b" + re.escape(term) + r"\b", lowered_observation)
                 for term in _FORBIDDEN_WATCH_OBSERVATION_TERMS
             ):
                 logger.warning(

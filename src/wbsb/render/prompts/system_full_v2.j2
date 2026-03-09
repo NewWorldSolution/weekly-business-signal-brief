@@ -36,18 +36,20 @@ Return exactly this schema:
   "situation": "string",
   "key_story": "string or null",
   "group_narratives": {
-    "acquisition": "string",
-    "financial_health": "string",
-    "operations": "string",
-    "revenue": "string"
+    "<category-key-from-payload>": "string"
   },
   "signal_narratives": {
-    "RULE_ID": "string"
+    "<rule_id-from-payload>": "string"
   },
   "watch_signals": [
     {
-      "metric_or_signal": "string",
+      "metric_or_signal": "<metric_id-or-rule_id-from-payload>",
       "observation": "string"
     }
   ]
 }
+
+GROUNDING RULES:
+- group_narratives keys must ONLY be categories listed under SIGNALS GROUPED BY CATEGORY in the payload. Do not add categories absent from the payload.
+- signal_narratives keys must ONLY be rule_ids listed in RULE IDS IN PAYLOAD.
+- watch_signals metric_or_signal values must ONLY be ids from RULE IDS IN PAYLOAD or METRIC IDS IN PAYLOAD.

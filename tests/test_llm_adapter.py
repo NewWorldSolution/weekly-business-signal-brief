@@ -903,6 +903,47 @@ class TestI5SchemaExtensions:
         )
         assert result is None
 
+    def test_i5_watch_signals_forbidden_verb_word_boundary(self):
+        """'should' must not match as a substring of 'shoulder' (word-boundary check)."""
+        raw = json.dumps({
+            "executive_summary": "Revenue declined.",
+            "watch_signals": [
+                {
+                    "metric_or_signal": "A1",
+                    "observation": "Shoulder season may affect bookings next period.",
+                }
+            ],
+            "signal_narratives": {"A1": "Revenue declined week-over-week."},
+        })
+        result = validate_response(
+            raw,
+            "full",
+            expected_rule_ids=["A1"],
+            expected_metric_ids=[],
+        )
+        assert result is not None
+        # "shoulder" must NOT trigger the "should" forbidden term check
+        assert result.watch_signals is not None
+
+    def test_i5_i4_style_full_response_still_valid(self):
+        """I4-style full-mode responses (executive_summary + signal_narratives, no situation)
+        must still validate successfully after I5-3 contract changes."""
+        raw = json.dumps({
+            "executive_summary": "Revenue declined 20% this week.",
+            "signal_narratives": {"A1": "Revenue dropped week-over-week."},
+        })
+        result = validate_response(
+            raw,
+            "full",
+            expected_rule_ids=["A1"],
+            expected_metric_ids=["net_revenue"],
+        )
+        assert result is not None
+        assert result.executive_summary == "Revenue declined 20% this week."
+        assert result.situation is None  # I5 fields absent — no fabrication
+        assert result.key_story is None
+        assert result.watch_signals is None
+
     def test_i5_watch_signals_missing_required_key_rejected(self):
         """watch_signals entry missing 'observation' key causes the whole field to be rejected."""
         raw = json.dumps({
