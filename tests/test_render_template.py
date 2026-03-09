@@ -217,6 +217,20 @@ def test_group_narrative_renders_only_for_categories_present():
     assert "This category is absent in findings." not in rendered
 
 
+def test_group_narrative_display_name_keys_normalized():
+    """LLM returns display-name keys (e.g. 'Acquisition') — must match internal keys."""
+    findings = _base_findings_with_dominant_cluster()
+    llm = LLMResult(
+        group_narratives={
+            "Acquisition": "Display-name key normalized correctly.",
+            "Financial Health": "This category is absent in findings.",
+        }
+    )
+    rendered = render_template(findings, llm_result=llm)
+    assert "Display-name key normalized correctly." in rendered
+    assert "This category is absent in findings." not in rendered
+
+
 def test_group_narrative_omitted_when_missing():
     findings = _base_findings_with_dominant_cluster()
     llm = LLMResult(group_narratives={"revenue": "Revenue cluster text."})
