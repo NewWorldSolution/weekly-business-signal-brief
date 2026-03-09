@@ -1,8 +1,8 @@
 # Iteration 6 — Historical Memory & Trend Awareness
 ## Detailed Task Plan
 
-**Status:** I6-0 through I6-3 complete. PRs #27 (I6-2) and #28 (I6-3) ready for review into `feature/iteration-6`. I6-4 is next.
-**Baseline:** 242 tests passing, ruff clean.
+**Status:** I6-0 through I6-4 complete. PRs #27 (I6-2), #28 (I6-3), #29 (I6-4) ready for review into `feature/iteration-6`. I6-5 is next (blocked on I6-3 + I6-4 review).
+**Baseline:** 262 tests passing, ruff clean.
 
 ---
 
@@ -16,7 +16,7 @@ main
       ├── feature/i6-1-history-config     (merged ✅)
       ├── feature/i6-2-history-store      (PR #27 ready ✅)
       ├── feature/i6-3-pipeline-integration (PR #28 ready ✅)
-      ├── feature/i6-4-trend-engine       ← next
+      ├── feature/i6-4-trend-engine       (PR #29 ready ✅)
       ├── feature/i6-5-llm-trend-context
       └── feature/i6-6-prompt-template
 ```
@@ -36,7 +36,7 @@ I6-0  [Claude]   Docs update                    ✅ DONE (merged to main)
 I6-1  [Codex]    Config — history: section      ✅ DONE (merged to feature/iteration-6)
 I6-2  [Claude]   History store + HistoryReader  ✅ DONE (PR #27 ready — 18 tests, 235 total)
 I6-3  [Claude]   Pipeline integration           ✅ DONE (PR #28 ready — 7 tests, 242 total)
-I6-4  [Claude]   Trend engine                   → depends on I6-2   ← next
+I6-4  [Claude]   Trend engine                   ✅ DONE (PR #29 ready — 20 tests, 262 total)
 I6-5  [Claude]   LLM adapter extension          → depends on I6-3 + I6-4
 I6-6  [Codex]    Prompt template update         → depends on I6-5
 I6-7  [You]      Architecture review            → depends on I6-6
@@ -402,7 +402,19 @@ tests/test_history.py              ← extend
 
 **Owner:** Claude
 **Branch:** `feature/i6-4-trend-engine`
+**Status:** ✅ DONE — PR #29 ready for review
 **Depends on:** I6-2 merged (I6-3 can run in parallel)
+
+### Actual Deliverables
+- `src/wbsb/history/trends.py` — `TrendResult`, `compute_trends()`, `_classify()`, `_build_direction_sequence()`, config loading
+- `tests/test_trends.py` — 20 tests covering all 6 labels, flat-step neutrality, baseline formula, edge cases
+- Test count after: 262 (up from 242)
+
+### Deviations from Spec
+- Test file is `tests/test_trends.py` (new), not `tests/test_history.py` — deliberate separation of concerns matching the I6-3 precedent. Approved in `prompt-task-4.md`.
+- `except Exception` broad catch removed after code review — all data edge cases (sparse values, zero-prev, zero-baseline) are handled explicitly. Programming errors propagate as intended.
+
+
 
 ### Why Claude
 This is the most logic-dense module in Iteration 6. The six trend label definitions must be implemented precisely, with careful handling of edge cases (gaps in history, alternating signals, the boundary between `volatile` and `recovering`). It also requires reading config without hardcoding and threading `dataset_key` through correctly.
