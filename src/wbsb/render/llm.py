@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from wbsb.domain.models import Findings, LLMResult, LLMSignalNarratives
 from wbsb.render import llm_adapter
@@ -36,15 +37,14 @@ def _adapter_to_domain(adapter_result: llm_adapter.AdapterLLMResult) -> LLMResul
     )
 
 
-def _build_enriched_brief(findings: Findings, llm_result: LLMResult) -> str:
-    """Render the brief with LLM executive summary and per-signal narrative overrides.
+def _build_enriched_brief(findings: Findings, llm_overlay: Any) -> str:
+    """Render the brief with LLM section overlays and per-signal overrides.
 
-    Delegates to render_template() with llm_result so both the executive
-    summary and signal_narratives are injected into the Jinja2 context.
-    The template prefers the LLM narrative for each matching rule_id and
-    falls back to the deterministic narrative for any that are missing.
+    Delegates to render_template() with the validated adapter payload so all
+    Iteration-5 fields are available in the Jinja context even when the
+    shared domain model lags those optional fields.
     """
-    return render_template(findings, llm_result)
+    return render_template(findings, llm_overlay)
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +99,6 @@ def render_llm(
         return render_template(findings), None, rendered_system_prompt, rendered_user_prompt
 
     llm_result = _adapter_to_domain(adapter_result)
-    brief_md = _build_enriched_brief(findings, llm_result)
+    brief_md = _build_enriched_brief(findings, adapter_result)
 
     return brief_md, llm_result, rendered_system_prompt, rendered_user_prompt

@@ -1,13 +1,13 @@
-"""Unit tests for template rendering with optional LLM overlays (Task I4-4)."""
+"""Unit tests for section-based template rendering (Task I5-4)."""
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
 from wbsb.domain.models import (
+    AuditEvent,
     Findings,
-    LLMResult,
-    LLMSignalNarratives,
     MetricResult,
     Periods,
     RunMeta,
@@ -16,10 +16,27 @@ from wbsb.domain.models import (
 from wbsb.render.template import render_template
 
 
+@dataclass
+class _SignalNarrativesOverlay:
+    narratives: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
+class _LLMOverlay:
+    situation: str | None = None
+    key_story: str | None = None
+    group_narratives: dict[str, str] | None = None
+    signal_narratives: _SignalNarrativesOverlay = field(
+        default_factory=_SignalNarrativesOverlay
+    )
+    watch_signals: list[dict[str, str]] | None = None
+    executive_summary: str = ""
+
+
 def _run_meta() -> RunMeta:
     return RunMeta(
-        run_id="test-i4-4",
-        generated_at=datetime(2026, 3, 8, 12, 0, tzinfo=UTC),
+        run_id="test-i5-4",
+        generated_at=datetime(2026, 3, 9, 12, 0, tzinfo=UTC),
         input_file="test.csv",
         input_sha256="a" * 64,
         config_sha256="b" * 64,
@@ -41,6 +58,9 @@ def _make_metric(id: str, name: str, current: float, previous: float) -> MetricR
         name=name,
         unit="currency",
         format_hint="currency",
+        category="revenue",
+        category_order=1,
+        display_order=1,
         current=current,
         previous=previous,
         delta_abs=current - previous,
@@ -52,7 +72,7 @@ def _make_signal(
     rule_id: str,
     metric_id: str,
     label: str,
-    explanation: str,
+    category: str,
     current: float,
     previous: float,
 ) -> Signal:
@@ -61,10 +81,10 @@ def _make_signal(
         severity="WARN",
         metric_id=metric_id,
         label=label,
-        category="revenue",
+        category=category,
         priority=10,
         condition="delta_pct_lte",
-        explanation=explanation,
+        explanation=f"{metric_id} changed by threshold",
         evidence={
             "current": current,
             "previous": previous,
@@ -75,163 +95,236 @@ def _make_signal(
     )
 
 
-def _make_findings(signals: list[Signal]) -> Findings:
-    metrics = []
-    for signal in signals:
-        metrics.append(
-            _make_metric(
-                id=signal.metric_id,
-                name=f"Metric {signal.metric_id}",
-                current=signal.evidence["current"],
-                previous=signal.evidence["previous"],
-            )
+def _make_findings(
+    signals: list[Signal],
+    audit: list[AuditEvent] | None = None,
+) -> Findings:
+    metrics = [
+        _make_metric(
+            id=signal.metric_id,
+            name=f"Metric {signal.metric_id}",
+            current=signal.evidence["current"],
+            previous=signal.evidence["previous"],
         )
+        for signal in signals
+    ]
     return Findings(
         run=_run_meta(),
         periods=_periods(),
         metrics=metrics,
         signals=signals,
-        audit=[],
+        audit=audit or [],
     )
 
 
-def _extract_narrative(md: str, rule_id: str) -> str:
+def _extract_signal_narrative(md: str, rule_id: str) -> str:
     pattern = rf"### .* \(Rule {re.escape(rule_id)}\)\n\n(.*?)\n\n\*\*Evidence:\*\*"
     match = re.search(pattern, md, flags=re.DOTALL)
     assert match is not None
     return match.group(1).strip()
 
 
-def test_deterministic_rendering_without_llm_result():
-    findings = _make_findings(
+def _base_findings_with_dominant_cluster() -> Findings:
+    return _make_findings(
         [
-            _make_signal(
-                rule_id="A1",
-                metric_id="net_revenue",
-                label="Revenue Decline",
-                explanation="deterministic A1 explanation",
-                current=8000.0,
-                previous=10000.0,
-            )
-        ]
-    )
-    rendered = render_template(findings)
-    assert "## Executive Summary" not in rendered
-    assert _extract_narrative(rendered, "A1")
-
-
-def test_rendering_with_executive_summary():
-    findings = _make_findings(
-        [
-            _make_signal(
-                rule_id="A1",
-                metric_id="net_revenue",
-                label="Revenue Decline",
-                explanation="deterministic A1 explanation",
-                current=8000.0,
-                previous=10000.0,
-            )
-        ]
-    )
-    llm_result = LLMResult(executive_summary="This week revenue softened.")
-    rendered = render_template(findings, llm_result=llm_result)
-    assert "## Executive Summary" in rendered
-    assert "This week revenue softened." in rendered
-    assert rendered.index("## Executive Summary") < rendered.index("## Weekly Priorities")
-
-
-def test_rendering_with_signal_narrative_overrides():
-    findings = _make_findings(
-        [
-            _make_signal(
-                rule_id="A1",
-                metric_id="net_revenue",
-                label="Revenue Decline",
-                explanation="deterministic A1 explanation",
-                current=8000.0,
-                previous=10000.0,
-            )
-        ]
-    )
-    baseline = render_template(findings)
-    baseline_narrative = _extract_narrative(baseline, "A1")
-
-    llm_result = LLMResult(
-        signal_narratives=LLMSignalNarratives(
-            narratives={"A1": "LLM A1 narrative replacement."}
-        )
-    )
-    rendered = render_template(findings, llm_result=llm_result)
-    assert _extract_narrative(rendered, "A1") == "LLM A1 narrative replacement."
-    assert "LLM A1 narrative replacement." in rendered
-    assert baseline_narrative != "LLM A1 narrative replacement."
-
-
-def test_partial_signal_narrative_overrides_only_replace_matching_rules():
-    findings = _make_findings(
-        [
-            _make_signal(
-                rule_id="A1",
-                metric_id="net_revenue",
-                label="Revenue Decline",
-                explanation="deterministic A1 explanation",
-                current=8000.0,
-                previous=10000.0,
-            ),
             _make_signal(
                 rule_id="B1",
-                metric_id="new_mrr",
-                label="MRR Decline",
-                explanation="deterministic B1 explanation",
-                current=2000.0,
-                previous=3000.0,
+                metric_id="cac_paid",
+                label="CAC Rising",
+                category="acquisition",
+                current=220.0,
+                previous=150.0,
+            ),
+            _make_signal(
+                rule_id="C1",
+                metric_id="paid_lead_to_client",
+                label="Conversion Falling",
+                category="acquisition",
+                current=0.60,
+                previous=0.80,
+            ),
+            _make_signal(
+                rule_id="A1",
+                metric_id="net_revenue",
+                label="Revenue Decline",
+                category="revenue",
+                current=8000.0,
+                previous=10000.0,
             ),
         ]
     )
-    baseline = render_template(findings)
-    baseline_b1 = _extract_narrative(baseline, "B1")
 
-    llm_result = LLMResult(
-        signal_narratives=LLMSignalNarratives(
-            narratives={"A1": "LLM override for A1 only."}
+
+def test_situation_section_renders_when_present():
+    findings = _base_findings_with_dominant_cluster()
+    llm = _LLMOverlay(situation="Performance softened across key categories.")
+    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    assert "## Situation" in rendered
+    assert "Performance softened across key categories." in rendered
+
+
+def test_situation_section_omitted_when_absent():
+    findings = _base_findings_with_dominant_cluster()
+    llm = _LLMOverlay(situation="   ")
+    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    assert "## Situation" not in rendered
+
+
+def test_executive_summary_section_removed():
+    findings = _base_findings_with_dominant_cluster()
+    llm = _LLMOverlay(executive_summary="Legacy summary text.")
+    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    assert "## Executive Summary" not in rendered
+    assert "Legacy summary text." not in rendered
+
+
+def test_key_story_renders_when_present_and_dominant_cluster_exists():
+    findings = _base_findings_with_dominant_cluster()
+    llm = _LLMOverlay(key_story="Acquisition signals moved together this week.")
+    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    assert "## Key Story This Week" in rendered
+    assert "Acquisition signals moved together this week." in rendered
+
+
+def test_key_story_omitted_when_absent():
+    findings = _base_findings_with_dominant_cluster()
+    llm = _LLMOverlay(key_story=None)
+    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    assert "## Key Story This Week" not in rendered
+
+
+def test_key_story_omitted_when_dominant_cluster_does_not_exist():
+    findings = _make_findings(
+        [
+            _make_signal(
+                rule_id="B1",
+                metric_id="cac_paid",
+                label="CAC Rising",
+                category="acquisition",
+                current=220.0,
+                previous=150.0,
+            ),
+            _make_signal(
+                rule_id="A1",
+                metric_id="net_revenue",
+                label="Revenue Decline",
+                category="revenue",
+                current=8000.0,
+                previous=10000.0,
+            ),
+        ]
+    )
+    llm = _LLMOverlay(key_story="This should be hidden.")
+    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    assert "## Key Story This Week" not in rendered
+    assert "This should be hidden." not in rendered
+
+
+def test_group_narrative_renders_only_for_categories_present():
+    findings = _base_findings_with_dominant_cluster()
+    llm = _LLMOverlay(
+        group_narratives={
+            "acquisition": "Acquisition movements co-occurred.",
+            "financial_health": "This category is absent in findings.",
+        }
+    )
+    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    assert "Acquisition movements co-occurred." in rendered
+    assert "This category is absent in findings." not in rendered
+
+
+def test_group_narrative_omitted_when_missing():
+    findings = _base_findings_with_dominant_cluster()
+    llm = _LLMOverlay(group_narratives={"revenue": "Revenue cluster text."})
+    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    assert "Revenue cluster text." in rendered
+    assert "Acquisition movements co-occurred." not in rendered
+
+
+def test_signal_narrative_override_still_works_with_fallback():
+    findings = _base_findings_with_dominant_cluster()
+    baseline = render_template(findings)
+    baseline_a1 = _extract_signal_narrative(baseline, "A1")
+    baseline_c1 = _extract_signal_narrative(baseline, "C1")
+
+    llm = _LLMOverlay(
+        signal_narratives=_SignalNarrativesOverlay(
+            narratives={"A1": "LLM override for revenue rule."}
         )
     )
-    rendered = render_template(findings, llm_result=llm_result)
-    assert _extract_narrative(rendered, "A1") == "LLM override for A1 only."
-    assert _extract_narrative(rendered, "B1") == baseline_b1
+    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    assert _extract_signal_narrative(rendered, "A1") == "LLM override for revenue rule."
+    assert _extract_signal_narrative(rendered, "C1") == baseline_c1
+    assert baseline_a1 != "LLM override for revenue rule."
 
 
-def test_llm_result_none_fallback_matches_deterministic_render():
+def test_watch_next_week_renders_when_present():
+    findings = _base_findings_with_dominant_cluster()
+    llm = _LLMOverlay(
+        watch_signals=[
+            {"metric_or_signal": "cac_paid", "observation": "Upward movement persisted."},
+            {"metric_or_signal": "A1", "observation": "Revenue remained below prior week."},
+            {"metric_or_signal": "ignored", "observation": "Should be capped at 2."},
+        ]
+    )
+    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    assert "## Watch Next Week" in rendered
+    assert "- cac_paid — Upward movement persisted." in rendered
+    assert "- A1 — Revenue remained below prior week." in rendered
+    assert "Should be capped at 2." not in rendered
+
+
+def test_watch_next_week_omitted_when_absent():
+    findings = _base_findings_with_dominant_cluster()
+    llm = _LLMOverlay(watch_signals=[])
+    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    assert "## Watch Next Week" not in rendered
+
+
+def test_deterministic_fallback_valid_when_llm_result_none():
+    findings = _base_findings_with_dominant_cluster()
+    rendered = render_template(findings, llm_result=None)
+    assert "## Weekly Priorities" in rendered
+    assert "## Signals (" in rendered
+    assert "## Situation" not in rendered
+    assert "## Key Story This Week" not in rendered
+    assert "## Watch Next Week" not in rendered
+
+
+def test_metrics_snapshot_and_audit_remain_unchanged():
     findings = _make_findings(
         [
             _make_signal(
                 rule_id="A1",
                 metric_id="net_revenue",
                 label="Revenue Decline",
-                explanation="deterministic A1 explanation",
+                category="revenue",
                 current=8000.0,
                 previous=10000.0,
             )
-        ]
+        ],
+        audit=[AuditEvent(event_type="coercion", message="Converted column to numeric.")],
     )
-    rendered_default = render_template(findings)
-    rendered_none = render_template(findings, llm_result=None)
-    assert rendered_none == rendered_default
+    llm = _LLMOverlay(
+        situation="Business softened this week.",
+        key_story="Revenue changes were the central movement.",
+    )
+    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    assert "## Key Metrics" in rendered
+    assert "| Metric | Current | Previous | Δ % |" in rendered
+    assert "## Audit" in rendered
+    assert "Converted column to numeric." in rendered
 
 
-def test_executive_summary_section_absent_when_summary_missing():
-    findings = _make_findings(
-        [
-            _make_signal(
-                rule_id="A1",
-                metric_id="net_revenue",
-                label="Revenue Decline",
-                explanation="deterministic A1 explanation",
-                current=8000.0,
-                previous=10000.0,
-            )
-        ]
+def test_no_empty_extra_sections_when_llm_fields_absent():
+    findings = _base_findings_with_dominant_cluster()
+    llm = _LLMOverlay(
+        situation="   ",
+        key_story="   ",
+        group_narratives={},
+        watch_signals=[{"metric_or_signal": " ", "observation": " "}],
     )
-    llm_result = LLMResult(executive_summary="   ")
-    rendered = render_template(findings, llm_result=llm_result)
-    assert "## Executive Summary" not in rendered
+    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    assert "## Situation" not in rendered
+    assert "## Key Story This Week" not in rendered
+    assert "## Watch Next Week" not in rendered
