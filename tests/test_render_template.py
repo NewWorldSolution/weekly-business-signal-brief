@@ -2,35 +2,19 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 
 from wbsb.domain.models import (
     AuditEvent,
     Findings,
+    LLMResult,
+    LLMSignalNarratives,
     MetricResult,
     Periods,
     RunMeta,
     Signal,
 )
 from wbsb.render.template import render_template
-
-
-@dataclass
-class _SignalNarrativesOverlay:
-    narratives: dict[str, str] = field(default_factory=dict)
-
-
-@dataclass
-class _LLMOverlay:
-    situation: str | None = None
-    key_story: str | None = None
-    group_narratives: dict[str, str] | None = None
-    signal_narratives: _SignalNarrativesOverlay = field(
-        default_factory=_SignalNarrativesOverlay
-    )
-    watch_signals: list[dict[str, str]] | None = None
-    executive_summary: str = ""
 
 
 def _run_meta() -> RunMeta:
@@ -157,39 +141,39 @@ def _base_findings_with_dominant_cluster() -> Findings:
 
 def test_situation_section_renders_when_present():
     findings = _base_findings_with_dominant_cluster()
-    llm = _LLMOverlay(situation="Performance softened across key categories.")
-    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    llm = LLMResult(situation="Performance softened across key categories.")
+    rendered = render_template(findings, llm_result=llm)
     assert "## Situation" in rendered
     assert "Performance softened across key categories." in rendered
 
 
 def test_situation_section_omitted_when_absent():
     findings = _base_findings_with_dominant_cluster()
-    llm = _LLMOverlay(situation="   ")
-    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    llm = LLMResult(situation="   ")
+    rendered = render_template(findings, llm_result=llm)
     assert "## Situation" not in rendered
 
 
 def test_executive_summary_section_removed():
     findings = _base_findings_with_dominant_cluster()
-    llm = _LLMOverlay(executive_summary="Legacy summary text.")
-    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    llm = LLMResult(executive_summary="Legacy summary text.")
+    rendered = render_template(findings, llm_result=llm)
     assert "## Executive Summary" not in rendered
     assert "Legacy summary text." not in rendered
 
 
 def test_key_story_renders_when_present_and_dominant_cluster_exists():
     findings = _base_findings_with_dominant_cluster()
-    llm = _LLMOverlay(key_story="Acquisition signals moved together this week.")
-    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    llm = LLMResult(key_story="Acquisition signals moved together this week.")
+    rendered = render_template(findings, llm_result=llm)
     assert "## Key Story This Week" in rendered
     assert "Acquisition signals moved together this week." in rendered
 
 
 def test_key_story_omitted_when_absent():
     findings = _base_findings_with_dominant_cluster()
-    llm = _LLMOverlay(key_story=None)
-    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    llm = LLMResult(key_story=None)
+    rendered = render_template(findings, llm_result=llm)
     assert "## Key Story This Week" not in rendered
 
 
@@ -214,29 +198,29 @@ def test_key_story_omitted_when_dominant_cluster_does_not_exist():
             ),
         ]
     )
-    llm = _LLMOverlay(key_story="This should be hidden.")
-    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    llm = LLMResult(key_story="This should be hidden.")
+    rendered = render_template(findings, llm_result=llm)
     assert "## Key Story This Week" not in rendered
     assert "This should be hidden." not in rendered
 
 
 def test_group_narrative_renders_only_for_categories_present():
     findings = _base_findings_with_dominant_cluster()
-    llm = _LLMOverlay(
+    llm = LLMResult(
         group_narratives={
             "acquisition": "Acquisition movements co-occurred.",
             "financial_health": "This category is absent in findings.",
         }
     )
-    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    rendered = render_template(findings, llm_result=llm)
     assert "Acquisition movements co-occurred." in rendered
     assert "This category is absent in findings." not in rendered
 
 
 def test_group_narrative_omitted_when_missing():
     findings = _base_findings_with_dominant_cluster()
-    llm = _LLMOverlay(group_narratives={"revenue": "Revenue cluster text."})
-    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    llm = LLMResult(group_narratives={"revenue": "Revenue cluster text."})
+    rendered = render_template(findings, llm_result=llm)
     assert "Revenue cluster text." in rendered
     assert "Acquisition movements co-occurred." not in rendered
 
@@ -247,12 +231,12 @@ def test_signal_narrative_override_still_works_with_fallback():
     baseline_a1 = _extract_signal_narrative(baseline, "A1")
     baseline_c1 = _extract_signal_narrative(baseline, "C1")
 
-    llm = _LLMOverlay(
-        signal_narratives=_SignalNarrativesOverlay(
+    llm = LLMResult(
+        signal_narratives=LLMSignalNarratives(
             narratives={"A1": "LLM override for revenue rule."}
         )
     )
-    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    rendered = render_template(findings, llm_result=llm)
     assert _extract_signal_narrative(rendered, "A1") == "LLM override for revenue rule."
     assert _extract_signal_narrative(rendered, "C1") == baseline_c1
     assert baseline_a1 != "LLM override for revenue rule."
@@ -260,14 +244,14 @@ def test_signal_narrative_override_still_works_with_fallback():
 
 def test_watch_next_week_renders_when_present():
     findings = _base_findings_with_dominant_cluster()
-    llm = _LLMOverlay(
+    llm = LLMResult(
         watch_signals=[
             {"metric_or_signal": "cac_paid", "observation": "Upward movement persisted."},
             {"metric_or_signal": "A1", "observation": "Revenue remained below prior week."},
             {"metric_or_signal": "ignored", "observation": "Should be capped at 2."},
         ]
     )
-    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    rendered = render_template(findings, llm_result=llm)
     assert "## Watch Next Week" in rendered
     assert "- cac_paid — Upward movement persisted." in rendered
     assert "- A1 — Revenue remained below prior week." in rendered
@@ -276,8 +260,8 @@ def test_watch_next_week_renders_when_present():
 
 def test_watch_next_week_omitted_when_absent():
     findings = _base_findings_with_dominant_cluster()
-    llm = _LLMOverlay(watch_signals=[])
-    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    llm = LLMResult(watch_signals=[])
+    rendered = render_template(findings, llm_result=llm)
     assert "## Watch Next Week" not in rendered
 
 
@@ -305,11 +289,11 @@ def test_metrics_snapshot_and_audit_remain_unchanged():
         ],
         audit=[AuditEvent(event_type="coercion", message="Converted column to numeric.")],
     )
-    llm = _LLMOverlay(
+    llm = LLMResult(
         situation="Business softened this week.",
         key_story="Revenue changes were the central movement.",
     )
-    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    rendered = render_template(findings, llm_result=llm)
     assert "## Key Metrics" in rendered
     assert "| Metric | Current | Previous | Δ % |" in rendered
     assert "## Audit" in rendered
@@ -318,13 +302,13 @@ def test_metrics_snapshot_and_audit_remain_unchanged():
 
 def test_no_empty_extra_sections_when_llm_fields_absent():
     findings = _base_findings_with_dominant_cluster()
-    llm = _LLMOverlay(
+    llm = LLMResult(
         situation="   ",
         key_story="   ",
         group_narratives={},
         watch_signals=[{"metric_or_signal": " ", "observation": " "}],
     )
-    rendered = render_template(findings, llm_result=llm)  # type: ignore[arg-type]
+    rendered = render_template(findings, llm_result=llm)
     assert "## Situation" not in rendered
     assert "## Key Story This Week" not in rendered
     assert "## Watch Next Week" not in rendered

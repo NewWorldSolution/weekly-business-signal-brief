@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from wbsb.domain.models import Findings, LLMResult, LLMSignalNarratives
 from wbsb.render import llm_adapter
@@ -37,14 +36,14 @@ def _adapter_to_domain(adapter_result: llm_adapter.AdapterLLMResult) -> LLMResul
     )
 
 
-def _build_enriched_brief(findings: Findings, llm_overlay: Any) -> str:
+def _build_enriched_brief(findings: Findings, llm_result: LLMResult) -> str:
     """Render the brief with LLM section overlays and per-signal overrides.
 
-    Delegates to render_template() with the validated adapter payload so all
-    Iteration-5 fields are available in the Jinja context even when the
-    shared domain model lags those optional fields.
+    Delegates to render_template() with llm_result so all section fields
+    (situation, key_story, group_narratives, signal_narratives, watch_signals)
+    are injected into the Jinja2 context.
     """
-    return render_template(findings, llm_overlay)
+    return render_template(findings, llm_result)
 
 
 # ---------------------------------------------------------------------------
@@ -99,6 +98,6 @@ def render_llm(
         return render_template(findings), None, rendered_system_prompt, rendered_user_prompt
 
     llm_result = _adapter_to_domain(adapter_result)
-    brief_md = _build_enriched_brief(findings, adapter_result)
+    brief_md = _build_enriched_brief(findings, llm_result)
 
     return brief_md, llm_result, rendered_system_prompt, rendered_user_prompt
