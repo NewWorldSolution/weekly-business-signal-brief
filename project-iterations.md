@@ -304,12 +304,41 @@ Notify the operator when the pipeline fails or degrades.
 - Pipeline error (validation failure, missing columns, etc.) → alert message with error summary and the audit log
 - No new data file found → reminder message: "No new weekly data detected. Upload a file to trigger the report."
 
+#### 9.5 — Secrets & Security Hardening
+
+Before I9 goes to any shared or hosted environment, confirm these controls are in place.
+
+**Secrets management:**
+- `.env.example` committed to the repo documenting every required env var (no real values, no defaults for secrets)
+- `ANTHROPIC_API_KEY` and all webhook URLs sourced exclusively from environment variables — never from config files or code
+- Docker image built with no secrets baked in; secrets injected at runtime via `--env-file` or orchestrator secrets
+- `runs/index.json` and `runs/*/findings.json` must not contain the API key or webhook URLs (audit before first deployment)
+
+**Webhook security:**
+- Webhook URLs treated as credentials — rotation procedure documented in `config/delivery.yaml` comments
+- Outbound webhook calls fail loudly (logged + alert) — never silently swallowed
+
+**Logging hygiene:**
+- No `os.environ` values printed in log output — confirm with a grep before release: `grep -r "environ" src/`
+- `findings.json` and `llm_response.json` must not contain raw prompts that include secrets
+
+**Input handling (scheduler):**
+- File watcher validates that the input path is within the configured watch directory (no path traversal)
+- Malformed or oversized input files rejected before pandas parsing
+
+**Checklist (must be confirmed before I9 PR merge):**
+- [ ] `.env.example` committed and up to date
+- [ ] `grep -r "ANTHROPIC_API_KEY" src/` returns only env var reads, never hardcoded strings
+- [ ] Docker image contains no `.env` file (`docker run --rm <image> ls -la | grep .env` returns nothing)
+- [ ] Webhook URLs are not logged at INFO level
+
 #### Acceptance Criteria
 - `docker build` succeeds and `docker run` executes a pipeline run end-to-end
 - Scheduler triggers a run on a configured cadence without manual intervention
 - Report delivered to Teams or Slack within 5 minutes of pipeline completion
 - LLM fallback state communicated clearly in the delivery message
 - Failure states produce an alert, not silence
+- All items in the 9.5 security checklist confirmed
 - Ruff clean; Docker image builds on CI
 
 #### Allowed Files
@@ -388,6 +417,13 @@ The delivery card (built in I9) includes action buttons per major section. Opera
 
 *Fallback web form:*
 A minimal HTML page linked from the delivery message — no login required, just run ID + section + label + optional comment. Stores to a local `feedback/` directory as JSON files.
+
+**Security note for the feedback endpoint (`feedback/server.py`):**
+- Validate that `run_id` in submitted feedback matches the format of a real run ID (regex: `^\d{8}T\d{6}Z_[a-f0-9]{6}$`) — reject anything that doesn't match before writing to disk
+- `section` field must be one of a fixed allowlist (`situation`, `key_story`, `group_narratives`, `watch_signals`) — reject unknown values
+- `comment` field: strip and cap at 1000 characters; no HTML rendering of this field anywhere
+- Feedback files written only inside the `feedback/` directory — never allow `run_id` or `section` values to influence the file path
+- No authentication required for MVP, but document this explicitly as a known limitation in `HOW_IT_WORKS.md`
 
 **What feedback is stored:**
 ```json
@@ -500,12 +536,39 @@ Simple sparkline charts for key metrics over the last 8 weeks (from I6 history s
 #### 8.5 — Feedback UI
 Web form alternative to Teams/Slack buttons for operators who prefer browser-based labeling.
 
+#### 8.6 — Web Application Security
+
+The dashboard is the first component with a real browser-facing attack surface. These controls are required before any deployment beyond localhost.
+
+**Authentication:**
+- HTTP Basic Auth gate in front of all routes (username + password via env vars `WBSB_DASH_USER` / `WBSB_DASH_PASS`)
+- No unauthenticated route exposes run data, findings, or feedback
+- Document the auth model in `HOW_IT_WORKS.md` — acknowledge it is not production-grade for multi-tenant use
+
+**Output encoding:**
+- All user-controlled content rendered via Jinja2 with `autoescape=True` — no `| safe` filter on any field sourced from data files or LLM output
+- `brief.md` rendered to HTML via a Markdown library (e.g. `mistune`) — not via raw string interpolation
+
+**CORS & headers:**
+- `X-Frame-Options: DENY` and `X-Content-Type-Options: nosniff` on all responses
+- No CORS headers added unless a specific cross-origin use case is identified
+
+**Logging hygiene:**
+- Access logs must not echo query parameters that might contain tokens
+- Error pages must not expose stack traces to the browser
+
+**Checklist (must be confirmed before I8 PR merge):**
+- [ ] `autoescape=True` confirmed in Jinja2 environment for all HTML templates
+- [ ] Auth gate tested: unauthenticated request to `/` returns 401
+- [ ] No `| safe` filter used on any field sourced from data or LLM output
+
 #### Acceptance Criteria
 - Web app accessible at configured URL after `docker-compose up`
 - Run history list loads within 2 seconds for 52 weeks of history
 - Report viewer renders all report sections correctly
 - Trend charts render for all tracked metrics
 - Feedback can be submitted from the web UI
+- All items in the 8.6 security checklist confirmed
 
 ---
 
@@ -591,6 +654,7 @@ These apply to every iteration. No change to any iteration is approved if it vio
 6. **LLM is optional** — every mode must produce a valid, complete report without LLM
 7. **Section-level degradation** — no section failure blocks another section from rendering
 8. **No recommendation engine** — the system observes and explains; it never advises
+9. **Secrets never in code or logs** — all credentials and tokens sourced from environment variables only; `.env` is gitignored; no secret value may appear in log output, artifact files, or error messages
 
 ---
 
