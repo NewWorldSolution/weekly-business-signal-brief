@@ -201,51 +201,12 @@ def compute_trends(
     results: dict[str, TrendResult] = {}
 
     for metric_id in metric_ids:
-        try:
-            history = history_reader.get_metric_history(
-                metric_id, n_weeks=effective_n_weeks
-            )
-            values = [v for _, v in history]
+        history = history_reader.get_metric_history(
+            metric_id, n_weeks=effective_n_weeks
+        )
+        values = [v for _, v in history]
 
-            if len(values) < 2:
-                results[metric_id] = TrendResult(
-                    metric_id=metric_id,
-                    trend_label="insufficient_history",
-                    weeks_consecutive=0,
-                    baseline_delta_pct=None,
-                    direction_sequence=[],
-                )
-                continue
-
-            direction_sequence = _build_direction_sequence(values, band)
-            label, consec = _classify(direction_sequence, len(values), cfg)
-
-            baseline = mean(values)
-            current = values[-1]
-            if baseline == 0.0:
-                logger.warning(
-                    "trends.baseline.zero: metric_id=%r baseline is 0, "
-                    "cannot compute baseline_delta_pct",
-                    metric_id,
-                )
-                baseline_delta_pct: float | None = None
-            else:
-                baseline_delta_pct = (current - baseline) / baseline
-
-            results[metric_id] = TrendResult(
-                metric_id=metric_id,
-                trend_label=label,
-                weeks_consecutive=consec,
-                baseline_delta_pct=baseline_delta_pct,
-                direction_sequence=direction_sequence,
-            )
-
-        except Exception as exc:
-            logger.warning(
-                "trends.compute.error: metric_id=%r error=%s — returning insufficient_history",
-                metric_id,
-                exc,
-            )
+        if len(values) < 2:
             results[metric_id] = TrendResult(
                 metric_id=metric_id,
                 trend_label="insufficient_history",
@@ -253,5 +214,29 @@ def compute_trends(
                 baseline_delta_pct=None,
                 direction_sequence=[],
             )
+            continue
+
+        direction_sequence = _build_direction_sequence(values, band)
+        label, consec = _classify(direction_sequence, len(values), cfg)
+
+        baseline = mean(values)
+        current = values[-1]
+        if baseline == 0.0:
+            logger.warning(
+                "trends.baseline.zero: metric_id=%r baseline is 0, "
+                "cannot compute baseline_delta_pct",
+                metric_id,
+            )
+            baseline_delta_pct: float | None = None
+        else:
+            baseline_delta_pct = (current - baseline) / baseline
+
+        results[metric_id] = TrendResult(
+            metric_id=metric_id,
+            trend_label=label,
+            weeks_consecutive=consec,
+            baseline_delta_pct=baseline_delta_pct,
+            direction_sequence=direction_sequence,
+        )
 
     return results

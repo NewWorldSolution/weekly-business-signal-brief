@@ -159,8 +159,8 @@ def test_compute_trends_empty_metric_list():
 # ---------------------------------------------------------------------------
 
 
-def test_direction_sequence_oldest_first():
-    # 100 → 110 (+10%, up), 110 → 100 (-9%, down)
+def test_direction_sequence_generation():
+    # 100 → 110 (+10%, up), 110 → 100 (-9%, down) — oldest step first
     t = _trend([100.0, 110.0, 100.0])
     assert t["direction_sequence"] == ["up", "down"]
 
@@ -198,3 +198,44 @@ def test_weeks_consecutive_zero_for_volatile():
     t = _trend([100.0, 110.0, 95.0, 108.0, 90.0])
     assert t["trend_label"] == "volatile"
     assert t["weeks_consecutive"] == 0
+
+
+# ---------------------------------------------------------------------------
+# Edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_baseline_average_zero():
+    # Values averaging to 0 — baseline_delta_pct must be None, no exception
+    t = _trend([-50.0, 0.0, 50.0])
+    assert t["baseline_delta_pct"] is None
+    # trend_label must still be a valid label (not raise)
+    assert t["trend_label"] in {
+        "rising", "falling", "stable", "recovering", "volatile", "insufficient_history"
+    }
+
+
+def test_history_gap_between_weeks():
+    # Non-contiguous week timestamps must not break classification.
+    # Gaps are accepted — only the values matter for direction computation.
+    reader = MagicMock()
+    reader.get_metric_history.return_value = [
+        ("2026-01-01", 100.0),
+        ("2026-01-15", 110.0),   # 2-week gap
+        ("2026-02-01", 120.0),   # 2.5-week gap
+    ]
+    result = compute_trends(reader, ["m"])
+    t = result["m"]
+    assert t["trend_label"] != "insufficient_history"
+    assert t["direction_sequence"] == ["up", "up"]
+
+
+def test_history_contains_missing_metric():
+    # When history reader returns [] for a metric (metric absent from all
+    # historical findings), compute_trends must return insufficient_history
+    # without raising.
+    reader = MagicMock()
+    reader.get_metric_history.return_value = []
+    result = compute_trends(reader, ["absent_metric"])
+    assert result["absent_metric"]["trend_label"] == "insufficient_history"
+    assert result["absent_metric"]["baseline_delta_pct"] is None
