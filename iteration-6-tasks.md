@@ -1,8 +1,8 @@
 # Iteration 6 — Historical Memory & Trend Awareness
 ## Detailed Task Plan
 
-**Status:** I6-1 complete and merged into `feature/iteration-6`. I6-2 is next.
-**Baseline:** 217 tests passing, ruff clean.
+**Status:** I6-0 through I6-3 complete. PRs #27 (I6-2) and #28 (I6-3) ready for review into `feature/iteration-6`. I6-4 is next.
+**Baseline:** 242 tests passing, ruff clean.
 
 ---
 
@@ -14,9 +14,9 @@ Iteration 6 uses a **dedicated integration branch** rather than merging tasks di
 main
  └── feature/iteration-6          ← iteration integration branch
       ├── feature/i6-1-history-config     (merged ✅)
-      ├── feature/i6-2-history-store      (next)
-      ├── feature/i6-3-pipeline-integration
-      ├── feature/i6-4-trend-engine
+      ├── feature/i6-2-history-store      (PR #27 ready ✅)
+      ├── feature/i6-3-pipeline-integration (PR #28 ready ✅)
+      ├── feature/i6-4-trend-engine       ← next
       ├── feature/i6-5-llm-trend-context
       └── feature/i6-6-prompt-template
 ```
@@ -34,13 +34,13 @@ main
 ```
 I6-0  [Claude]   Docs update                    ✅ DONE (merged to main)
 I6-1  [Codex]    Config — history: section      ✅ DONE (merged to feature/iteration-6)
-I6-2  [Claude]   History store + HistoryReader   → depends on I6-1
-I6-3  [Claude]   Pipeline integration            → depends on I6-2   ┐ can run
-I6-4  [Claude]   Trend engine                    → depends on I6-2   ┘ in parallel
-I6-5  [Claude]   LLM adapter extension           → depends on I6-3 + I6-4
-I6-6  [Codex]    Prompt template update          → depends on I6-5
-I6-7  [You]      Architecture review             → depends on I6-6
-I6-8  [Claude]   Final cleanup + merge to main   → depends on I6-7
+I6-2  [Claude]   History store + HistoryReader  ✅ DONE (PR #27 ready — 18 tests, 235 total)
+I6-3  [Claude]   Pipeline integration           ✅ DONE (PR #28 ready — 7 tests, 242 total)
+I6-4  [Claude]   Trend engine                   → depends on I6-2   ← next
+I6-5  [Claude]   LLM adapter extension          → depends on I6-3 + I6-4
+I6-6  [Codex]    Prompt template update         → depends on I6-5
+I6-7  [You]      Architecture review            → depends on I6-6
+I6-8  [Claude]   Final cleanup + merge to main  → depends on I6-7
 ```
 
 **One task = one PR into `feature/iteration-6`. Never combine tasks. Never PR directly to `main`.**
@@ -173,7 +173,20 @@ config/rules.yaml    ← add history: section only
 
 **Owner:** Claude
 **Branch:** `feature/i6-2-history-store`
+**Status:** ✅ DONE — PR #27 ready for review
 **Depends on:** I6-1 merged
+
+### Actual Deliverables
+- `src/wbsb/history/__init__.py` — empty package marker
+- `src/wbsb/history/store.py` — `RunRecord`, `derive_dataset_key()`, `register_run()` (atomic write), `HistoryReader`
+- `tests/test_history.py` — 18 tests (6 derive_dataset_key, 5 register_run, 7 HistoryReader)
+- Test count after: 235 (up from 217)
+
+### Deviations from Spec
+- None. All 18 tests pass. All acceptance criteria met.
+- Code review found `except OSError: pass` in temp-file cleanup (fixed) and weak n_weeks assertion (strengthened).
+
+
 
 ### Why Claude
 This module establishes the architectural foundation for all of Iteration 6. It touches file I/O, data isolation logic, and the shape of the index that every downstream task depends on. It requires architectural judgment about failure modes, race conditions (single-user, not multi-process, but still), and the contract the rest of the system will build against.
@@ -319,7 +332,19 @@ tests/test_history.py              ← new
 
 **Owner:** Claude
 **Branch:** `feature/i6-3-pipeline-integration`
+**Status:** ✅ DONE — PR #28 ready for review
 **Depends on:** I6-2 merged
+
+### Actual Deliverables
+- `src/wbsb/pipeline.py` — added `derive_dataset_key()`, `week_end = week_start + timedelta(days=6)`, `RunRecord` construction, `register_run()` call after `write_artifacts()`
+- `tests/test_pipeline_history.py` — 7 integration tests (new file; pipeline-level tests kept separate from store unit tests)
+- Test count after: 242 (up from 235)
+
+### Deviations from Spec
+- Test file is `tests/test_pipeline_history.py`, not `tests/test_history.py` — cleaner separation of concerns (store unit tests vs pipeline integration tests)
+- Code review added 2 missing tests: `test_pipeline_register_run_error_propagates` (monkeypatched register_run) and `test_pipeline_second_run_appends_index`; strengthened type assertions on index entry fields
+
+
 
 ### Why Claude
 `pipeline.py` is the orchestrator that touches every stage in order. Adding history registration in the wrong place (e.g., before artifacts are written, or in a try/except that swallows errors) would silently corrupt the history index or break the audit trail. This requires understanding of the pipeline's existing error handling and artifact lifecycle.
