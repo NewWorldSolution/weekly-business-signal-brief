@@ -5,6 +5,12 @@ defaults:
   min_prev_net_revenue: 3000
   volume_threshold: 5
 
+history:
+  n_weeks: 4                  # default lookback window for trend queries
+  min_consecutive: 2          # minimum consecutive weeks to classify rising or falling
+  stable_band_pct: 0.02       # week-over-week change within ±2% is considered stable
+  stable_min_weeks: 3         # minimum weeks of stability to assign the stable label
+
 rules:
   - id: A1
     label: Revenue Decline
