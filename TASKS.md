@@ -57,13 +57,17 @@ Build a lightweight index of historical runs so prior week metric values can be 
 
 ### What to Build
 - On each pipeline run, after `findings.json` is written, register the run in a local index at `runs/index.json`
-- Index record: `run_id`, `input_file`, `week_start`, `week_end`, `findings_path`
-- `HistoryReader` class in `src/wbsb/history/store.py` — queries index by metric_id and date range, returns ordered list of `(week_start, value)` tuples for any metric
+- Index record: `run_id`, `dataset_key`, `input_file`, `week_start`, `week_end`, `findings_path`
+  - `dataset_key` is the primary isolation key — derived from the basename of the input file (without date suffix or extension). Example: `weekly_data_2026-03-03.csv` → `dataset_key: "weekly_data"`. This prevents trend queries from mixing runs from different businesses or data sources.
+  - `input_file` is retained for full traceability but must not be used as the identity key on its own.
+- `HistoryReader` class in `src/wbsb/history/store.py` — queries index **filtered by `dataset_key`** then by date range; returns ordered list of `(week_start, value)` tuples for any metric
 - No external database — flat JSON file is sufficient for MVP
 
 ### Acceptance Criteria
 - `runs/index.json` is created/updated after every pipeline run
-- `HistoryReader.get_metric_history(metric_id, n_weeks=4)` returns prior values in chronological order
+- Each index entry contains `dataset_key` derived from the input filename
+- `HistoryReader.get_metric_history(metric_id, dataset_key, n_weeks=4)` returns prior values in chronological order, scoped to that dataset only
+- Runs from a different `dataset_key` never appear in query results
 - First run (no index yet) creates the index gracefully
 - All existing tests pass; new tests in `tests/test_history.py`
 - Ruff clean
@@ -83,11 +87,11 @@ tests/test_history.py              ← new
 Classify each tracked metric's direction over the prior N weeks into a human-readable trend label. This is arithmetic over historical values — no interpretation.
 
 ### What to Build
-- `src/wbsb/history/trends.py` — `compute_trends(history_reader, metric_ids, n_weeks=4)` returns a dict per metric:
+- `src/wbsb/history/trends.py` — `compute_trends(history_reader, metric_ids, dataset_key, n_weeks=4)` returns a dict per metric:
   ```python
   {
     "cac_paid": {
-      "trend_label": "rising",        # rising | falling | recovering | volatile | stable
+      "trend_label": "rising",        # rising | falling | recovering | volatile | stable | insufficient_history
       "weeks_consecutive": 3,          # how many consecutive weeks in current direction
       "baseline_delta_pct": 0.47,      # vs N-week average
       "direction_sequence": ["up", "up", "up", "flat"]
@@ -95,21 +99,35 @@ Classify each tracked metric's direction over the prior N weeks into a human-rea
   }
   ```
 - `trend_label` definitions:
-  - `rising` — 2+ consecutive weeks up
-  - `falling` — 2+ consecutive weeks down
+  - `rising` — consecutive weeks up ≥ `min_consecutive` threshold
+  - `falling` — consecutive weeks down ≥ `min_consecutive` threshold
   - `recovering` — was falling, now up for 1+ weeks
-  - `volatile` — direction changes every week
-  - `stable` — all weeks within ±2%
+  - `volatile` — direction changes every week (alternating)
+  - `stable` — all week-over-week changes within `stable_band_pct` for `stable_min_weeks` or more
+  - `insufficient_history` — fewer than 2 prior data points available; computed but **excluded from LLM prompt**
+- **Thresholds are config-driven** — all numeric trend thresholds must be read from `config/rules.yaml` under a `history:` key. No hardcoded numbers in `trends.py`.
+  ```yaml
+  # config/rules.yaml — to be added in this task
+  history:
+    min_consecutive: 2          # weeks needed to classify rising or falling
+    stable_band_pct: 0.02       # ±2% week-over-week change = stable
+    stable_min_weeks: 3         # minimum weeks of stability to label as stable
+    n_weeks: 4                  # default lookback window
+  ```
 - Only tracks metrics that have signals in the current findings (not all 16 metrics)
+- `dataset_key` is passed through to `HistoryReader` — trend engine never queries cross-dataset history
 
 ### Acceptance Criteria
-- All five trend labels computed correctly and unit-tested
-- `compute_trends()` returns empty dict gracefully when fewer than 2 prior weeks exist
+- All six trend labels computed correctly and unit-tested (including `insufficient_history`)
+- `insufficient_history` is returned in the dict when fewer than 2 prior weeks exist (not an empty dict)
+- All thresholds read from `config/rules.yaml` — no magic numbers in `trends.py`
+- Trend computation is scoped to `dataset_key` — cross-dataset contamination is tested and absent
 - Ruff clean
 
 ### Allowed Files
 ```
 src/wbsb/history/trends.py         ← new
+config/rules.yaml                  ← add history: section
 tests/test_history.py              ← extend
 ```
 
@@ -129,12 +147,14 @@ Include trend context in the LLM user prompt as stated facts. The LLM receives t
   paid_lead_to_client:   2 consecutive weeks falling | -18% vs 4-week average
   gross_margin:          stable (within ±2% for 4 weeks)
   ```
-- Section is omitted entirely when fewer than 2 prior weeks exist (first run graceful)
-- `pipeline.py` calls `compute_trends()` and passes result to `render_llm()`
+- **Exclusion rule:** metrics with `trend_label: "insufficient_history"` are **not included** in the TREND CONTEXT section sent to the LLM. They exist in the internal trend dict for observability and testing, but provide no useful signal to the LLM.
+- Section is omitted entirely when no metrics have a valid (non-`insufficient_history`) trend label
+- `pipeline.py` calls `compute_trends()` and passes result to `render_llm()`; passes `dataset_key` through the call chain
 
 ### Acceptance Criteria
 - Trend context appears in rendered user prompt when history exists
-- Section absent when no prior history (first run)
+- `insufficient_history` metrics are present in `compute_trends()` output but absent from the rendered prompt
+- Section absent entirely when no prior history (first run) or all metrics are `insufficient_history`
 - Existing prompt structure and section order unchanged
 - All existing tests pass; extend `tests/test_llm_adapter.py` for trend context
 - Ruff clean

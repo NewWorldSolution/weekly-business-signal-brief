@@ -188,8 +188,10 @@ The difference between "CAC rose 15% this week" and "CAC has risen every week fo
 A lightweight store that indexes historical `findings.json` files so they can be queried efficiently.
 
 - On each run, after `findings.json` is written, register the run in a local index (`runs/index.json` or SQLite)
-- Index records: `run_id`, `input_file`, `week_start`, `week_end`, `signal_count`, `findings_path`
-- `HistoryReader` class in `wbsb.history.store` — queries index by metric_id, date range, category
+- Index records: `run_id`, `dataset_key`, `input_file`, `week_start`, `week_end`, `signal_count`, `findings_path`
+  - `dataset_key` is the primary isolation key, derived from the input filename stem (e.g. `weekly_data_2026-03-03.csv` → `"weekly_data"`). It prevents trend queries from mixing runs across different businesses or data sources.
+  - `input_file` is retained for full path traceability but must not be used as the identity key alone.
+- `HistoryReader` class in `wbsb.history.store` — queries index **filtered by `dataset_key`** then by metric_id and date range; never returns results from a different dataset
 - No external database required for MVP — flat JSON index file is sufficient
 
 #### 6.2 — Trend Computation
@@ -207,11 +209,35 @@ For each metric in the current findings:
     "weeks_consecutive": 3,
     "baseline_delta_pct": 0.47,
     "direction_sequence": ["up", "up", "up", "flat"]
+  },
+  "gross_margin": {
+    "trend_label": "insufficient_history",
+    "weeks_consecutive": 0,
+    "baseline_delta_pct": None,
+    "direction_sequence": ["up"]
   }
 }
 ```
 
-Trend computation is purely arithmetic — no interpretation, no causal claims.
+Trend labels:
+- `rising` — consecutive up weeks ≥ `min_consecutive`
+- `falling` — consecutive down weeks ≥ `min_consecutive`
+- `recovering` — previously falling, now up for 1+ weeks
+- `volatile` — alternating direction every week
+- `stable` — all week-over-week changes within `stable_band_pct` for `stable_min_weeks` or more
+- `insufficient_history` — fewer than 2 prior data points; returned in the internal dict for observability and test coverage, but **excluded from the LLM prompt**
+
+**All numeric thresholds are config-driven.** A `history:` section is added to `config/rules.yaml` in this task:
+```yaml
+history:
+  min_consecutive: 2        # weeks to classify rising or falling
+  stable_band_pct: 0.02     # ±2% = stable
+  stable_min_weeks: 3       # minimum stable weeks to label as stable
+  n_weeks: 4                # default lookback window
+```
+No magic numbers in `trends.py`.
+
+Trend computation is purely arithmetic — no interpretation, no causal claims. `dataset_key` is passed through from the pipeline so the trend engine only reads history for the active dataset.
 
 #### 6.3 — Prompt Payload Extension
 Include historical context in the LLM user prompt as stated facts.
@@ -226,6 +252,8 @@ gross_margin:    stable (within ±2% for 4 weeks)
 ```
 
 This gives the LLM trajectory as ground truth — it does not need to infer it.
+
+**Exclusion rule:** metrics with `trend_label: "insufficient_history"` are not included in this section. The section is omitted entirely when no metrics have a valid trend label (first run, or all metrics have insufficient history).
 
 #### 6.4 — Updated Report Sections
 - **Situation** — LLM now has permission to reference trajectory, not just this-week delta
@@ -243,11 +271,12 @@ This gives the LLM trajectory as ground truth — it does not need to infer it.
 
 #### Allowed Files
 ```
-src/wbsb/history/store.py          ← new: HistoryReader, index management
-src/wbsb/history/trends.py         ← new: deterministic trend classification
+src/wbsb/history/store.py          ← new: HistoryReader, index management (dataset_key scoped)
+src/wbsb/history/trends.py         ← new: deterministic trend classification (config-driven thresholds)
 src/wbsb/render/llm_adapter.py     ← extend build_prompt_inputs() with trend context
 src/wbsb/render/prompts/           ← extend user_full_v2.j2 with trend section
-src/wbsb/pipeline.py               ← register run in history index after findings written
+src/wbsb/pipeline.py               ← register run in history index; compute trends; pass dataset_key
+config/rules.yaml                  ← add history: section with trend thresholds
 tests/test_history.py              ← new
 tests/test_llm_adapter.py          ← extend for trend context in prompt
 ```
