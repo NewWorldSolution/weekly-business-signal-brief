@@ -2,327 +2,179 @@
 
 ## Weekly Business Signal Brief (WBSB)
 
-This document defines controlled development tasks and execution discipline for the WBSB repository.
-
-Purpose:
-- Prevent scope creep
-- Enforce architectural stability
-- Coordinate iteration work
-- Keep the engine deterministic and auditable
+This document tracks the current active iteration tasks.
+Full roadmap with all planned iterations: see `project-iterations.md`.
 
 ---
 
 ## Development Rules
 
-- One task at a time.
-- One task per PR.
-- Plan Mode required for multi-file changes.
+- One task at a time. One task per PR.
+- Plan Mode required for multi-file or behavioral changes.
 - Only modify files explicitly allowed in each task.
 - Always run before committing:
   - `pytest`
   - `ruff check .`
 - No architectural rewrites unless explicitly defined.
-- No hidden behavior changes.
 - No silent error handling (`except: pass` is forbidden).
-- No refactors outside the allowed task scope.
+- No refactors outside allowed task scope.
 
 ---
 
-# Iteration 1 — Hardening & Reliability
+## Iteration Status
+
+| Iteration | Theme | Status |
+|---|---|---|
+| I1 | Pipeline Foundation | ✅ Complete |
+| I2 | Signal Architecture | ✅ Complete |
+| I3 | Business Reporting Layer | ✅ Complete |
+| I4 | LLM Integration | ✅ Complete |
+| I5 | Analytical Reasoning Upgrade | ✅ Complete |
+| **I6** | **Historical Memory & Trend Awareness** | **🔲 Next** |
+| I9 | Deployment & Delivery | 🔲 Planned |
+| I7 | Evaluation Framework & Feedback Loop | 🔲 Planned |
+| I8 | Dashboard & Visual Reporting | 🔲 Planned |
+| I10 | Multi-File Data Consolidation | 🔲 Planned |
+
+MVP = I1–I7 + I9 complete.
+
+---
+
+# Iteration 6 — Historical Memory & Trend Awareness
 
 ## Theme
+Give the system memory across weeks. Every report today is stateless — it compares only the current week to the prior week. With historical context the system detects trajectories, consecutive signal patterns, and whether a metric is recovering or compounding.
 
-Make the deterministic engine fail loudly, predictably, and safely.
-
-### Constraints
-
-- No new features
-- No LLM implementation
-- No architecture changes
-- No performance optimizations
-- No refactoring beyond task scope
+## Goal
+Pass multi-week trend facts to the LLM so it can produce situation summaries and key stories that reference trajectory — not just this-week delta.
 
 ---
 
-## Task 1 — Missing Week Must Raise Explicit Error (HIGH)
+## Task I6-1 — Findings Store and History Index
 
-### Problem
+### Purpose
+Build a lightweight index of historical runs so prior week metric values can be queried efficiently.
 
-`_get_row()` returns `{}` when a week is missing.  
-This allows silent downstream corruption and cryptic failures.
+### What to Build
+- On each pipeline run, after `findings.json` is written, register the run in a local index at `runs/index.json`
+- Index record: `run_id`, `input_file`, `week_start`, `week_end`, `findings_path`
+- `HistoryReader` class in `src/wbsb/history/store.py` — queries index by metric_id and date range, returns ordered list of `(week_start, value)` tuples for any metric
+- No external database — flat JSON file is sufficient for MVP
 
-### Required Changes
-
-Modify:
-- `src/wbsb/findings/build.py`
-
-Requirements:
-- If a week is missing:
-  - Raise `ValueError`
-  - Error message must include:
-    - Missing `week_start_date`
-    - Minimum available week in dataset
-    - Maximum available week in dataset
-    - Suggestion to verify `--week` or dataset completeness
-- Do **not** return `{}` anymore.
-- Allow the exception to propagate naturally (do not swallow it).
-
-### Test
-
-Create:
-- `tests/test_missing_week.py`
-
-Test must:
-- Build a minimal DataFrame with two valid weeks
-- Call `build_findings()` using a non-existing week
-- Assert `ValueError`
-- Assert missing date appears in error message
+### Acceptance Criteria
+- `runs/index.json` is created/updated after every pipeline run
+- `HistoryReader.get_metric_history(metric_id, n_weeks=4)` returns prior values in chronological order
+- First run (no index yet) creates the index gracefully
+- All existing tests pass; new tests in `tests/test_history.py`
+- Ruff clean
 
 ### Allowed Files
-
-- `src/wbsb/findings/build.py`
-- `tests/test_missing_week.py`
-
-### Acceptance Criteria
-
-- All existing tests pass
-- New test passes
-- Ruff clean
-- No unrelated files modified
+```
+src/wbsb/history/store.py          ← new
+src/wbsb/pipeline.py               ← register run in index after findings written
+tests/test_history.py              ← new
+```
 
 ---
 
-## Task 2 — End-to-End Integration Test (HIGH)
+## Task I6-2 — Deterministic Trend Classification
 
-### Problem
+### Purpose
+Classify each tracked metric's direction over the prior N weeks into a human-readable trend label. This is arithmetic over historical values — no interpretation.
 
-No full pipeline integration test exists.
+### What to Build
+- `src/wbsb/history/trends.py` — `compute_trends(history_reader, metric_ids, n_weeks=4)` returns a dict per metric:
+  ```python
+  {
+    "cac_paid": {
+      "trend_label": "rising",        # rising | falling | recovering | volatile | stable
+      "weeks_consecutive": 3,          # how many consecutive weeks in current direction
+      "baseline_delta_pct": 0.47,      # vs N-week average
+      "direction_sequence": ["up", "up", "up", "flat"]
+    }
+  }
+  ```
+- `trend_label` definitions:
+  - `rising` — 2+ consecutive weeks up
+  - `falling` — 2+ consecutive weeks down
+  - `recovering` — was falling, now up for 1+ weeks
+  - `volatile` — direction changes every week
+  - `stable` — all weeks within ±2%
+- Only tracks metrics that have signals in the current findings (not all 16 metrics)
 
-### Required Changes
-
-Add:
-- `tests/test_e2e_pipeline.py`
-
-Test must:
-- Use `examples/sample_weekly.csv` (preferred for now; guaranteed to exist on main)
-- Call `execute(...)` with `llm_mode="off"`
-- Use `tmp_path` for output
-- Assert:
-  - A run directory is created
-  - `findings.json` exists
-  - `brief.md` exists
-  - `manifest.json` exists
-  - `logs.jsonl` exists
-  - Findings contains `schema_version == "1.0"`
+### Acceptance Criteria
+- All five trend labels computed correctly and unit-tested
+- `compute_trends()` returns empty dict gracefully when fewer than 2 prior weeks exist
+- Ruff clean
 
 ### Allowed Files
-
-- `tests/test_e2e_pipeline.py`
-
-### Acceptance Criteria
-
-- Test passes
-- No production code modified
-- Ruff clean
+```
+src/wbsb/history/trends.py         ← new
+tests/test_history.py              ← extend
+```
 
 ---
 
-## Task 3 — Export Layer Must Not Pretend Success (HIGH)
+## Task I6-3 — Prompt Payload Extension
 
-### Problem
+### Purpose
+Include trend context in the LLM user prompt as stated facts. The LLM receives trajectory as ground truth — it does not infer it.
 
-Artifact writing failures could appear as success.
+### What to Build
+- Extend `build_prompt_inputs()` in `llm_adapter.py` to accept and include trend context
+- Extend `user_full_v2.j2` with a TREND CONTEXT section:
+  ```
+  TREND CONTEXT (prior 4 weeks)
+  cac_paid:              3 consecutive weeks rising | +47% vs 4-week average
+  paid_lead_to_client:   2 consecutive weeks falling | -18% vs 4-week average
+  gross_margin:          stable (within ±2% for 4 weeks)
+  ```
+- Section is omitted entirely when fewer than 2 prior weeks exist (first run graceful)
+- `pipeline.py` calls `compute_trends()` and passes result to `render_llm()`
 
-### Required Changes
-
-Modify:
-- `src/wbsb/export/write.py`
-
-Requirements:
-- Wrap file writes in `try/except`
-- Log the error
-- Re-raise the exception
-- Never silently continue
-- Pipeline must fail on write failure
-
-### Test
-
-Create:
-- `tests/test_export_write_failures.py`
-
-Test must:
-- Simulate write failure using monkeypatch (e.g., patch `Path.write_text` / `Path.write_bytes`)
-- Assert exception propagates (or execute returns non-zero if testing at pipeline level)
+### Acceptance Criteria
+- Trend context appears in rendered user prompt when history exists
+- Section absent when no prior history (first run)
+- Existing prompt structure and section order unchanged
+- All existing tests pass; extend `tests/test_llm_adapter.py` for trend context
+- Ruff clean
 
 ### Allowed Files
-
-- `src/wbsb/export/write.py`
-- `tests/test_export_write_failures.py`
-
-### Acceptance Criteria
-
-- Write failure causes pipeline failure
-- Tests pass
-- Ruff clean
+```
+src/wbsb/render/llm_adapter.py          ← extend build_prompt_inputs()
+src/wbsb/render/prompts/user_full_v2.j2 ← add TREND CONTEXT section
+src/wbsb/pipeline.py                    ← compute trends, pass to render_llm()
+tests/test_llm_adapter.py               ← extend
+```
 
 ---
 
-## Task 4 — Logging Must Not Swallow Exceptions (MEDIUM)
-
-### Problem
-
-Silent exception swallowing in the logging layer hides failures.
-
-### Required Changes
-
-Modify:
-- `src/wbsb/observability/logging.py`
-
-Requirements:
-- Remove any fully-silent exception swallowing.
-- Provide minimal fallback (stderr once OR counter) without spamming.
-- Do not break existing behavior.
-
-### Allowed Files
-
-- `src/wbsb/observability/logging.py`
-- (Optional) `tests/test_logging_fallback.py`
-
-### Acceptance Criteria
-
-- Logging failures are not completely silent
-- Tests pass
-- Ruff clean
-
----
-
-## Task 5 — Implement `volume_metric` in Rules Engine (MEDIUM)
-
-### Problem
-
-`volume_metric` is defined in YAML but ignored in the engine.
-
-### Required Changes
-
-Modify:
-- `src/wbsb/rules/engine.py`
-
-Requirements:
-- For `hybrid_delta_pct_lte`:
-  - Use `volume_metric` if defined in YAML
-  - Fallback to `metric_id` if not defined
-- Add test coverage.
-
-### Allowed Files
-
-- `src/wbsb/rules/engine.py`
-- `tests/test_rules.py`
-
-### Acceptance Criteria
-
-- `volume_metric` behavior correct
-- Existing tests unaffected
-- Ruff clean
-
----
-
-## Task 6 — Move `safe_div` to `utils.math` (MEDIUM)
-
-### Problem
-
-`safe_div` currently lives in `hash.py`, which is the wrong responsibility.
-
-### Required Changes
-
-- Create: `src/wbsb/utils/math.py`
-- Move `safe_div` there
-- Update imports in:
-  - `src/wbsb/metrics/calculate.py`
-  - `src/wbsb/compare/delta.py`
-- Remove from `src/wbsb/utils/hash.py`
-
-### Acceptance Criteria
-
-- No behavior change
-- All tests pass
-- Ruff clean
-- No circular imports
-
----
-
-## Task 7 — Strengthen Integer Validation (LOW)
-
-### Problem
-
-Integer columns allow floats silently.
-
-### Required Changes
-
-Modify:
-- `src/wbsb/validate/schema.py`
-
-Requirements:
-- Detect non-integer numeric values in INT columns
-- Emit `AuditEvent` with:
-  - `event_type: "non_integer_value"`
-- Do not crash pipeline
-
-### Acceptance Criteria
-
-- AuditEvent emitted correctly
-- No regression
-- Ruff clean
-
----
-
-## Task 8 — Dataset Pack Completion (LOW)
-
-### Goal
-
-Improve synthetic dataset coverage.
-
-### Required Changes
-
-- Add datasets to: `examples/datasets/`
-- Add documentation: `examples/datasets/README.md`
-- No engine changes
-
-### Acceptance Criteria
-
-- Datasets added and documented
-- No production code changes
-- Ruff clean
-
----
-
-# Execution Workflow
+## Execution Workflow
 
 For each task:
 
-1. Create feature branch
+1. Create feature branch: `feature/i6-task-N-description`
 2. Use Plan Mode if multi-file or behavioral change
-3. Confirm allowed files before executing changes
+3. Confirm allowed files before executing
 4. Implement changes
-5. Run:
-   - `pytest`
-   - `ruff check .`
-6. Commit with a clear message
-7. Push
-8. Open PR
-9. Merge after review
+5. Run: `pytest` and `ruff check .`
+6. Commit with clear message
+7. Push and open PR
+8. Merge after review
 
 Never combine multiple tasks in a single PR unless explicitly approved.
 
 ---
 
-# Iteration 1 — Definition of Done
+## Iteration 6 — Definition of Done
 
-Iteration 1 is complete when:
+Iteration 6 is complete when:
 
-- Missing week raises explicit error (Task 1)
-- End-to-end integration test exists (Task 2)
-- No silent I/O failures (Task 3)
-- Logging does not swallow exceptions (Task 4)
-- All tests passing
-- Ruff clean
-- `main` branch stable and CI passing
+- [ ] `runs/index.json` created and updated on every pipeline run (Task I6-1)
+- [ ] `HistoryReader.get_metric_history()` returns correct historical values (Task I6-1)
+- [ ] Trend labels computed correctly for all five trend types (Task I6-2)
+- [ ] Trend context appears in LLM user prompt when history exists (Task I6-3)
+- [ ] First run (no history) works gracefully — trend section omitted (Task I6-3)
+- [ ] All existing 217+ tests pass
+- [ ] Ruff clean
+- [ ] `main` branch stable
