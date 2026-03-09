@@ -110,11 +110,21 @@ def _valid_summary_json(summary: str = "Revenue declined 20% week-over-week.") -
 def _valid_full_json(
     summary: str = "Revenue and leads declined this week.",
     narratives: dict | None = None,
+    situation: str | None = None,
+    key_story: str | None = None,
+    watch_signals: list[dict[str, str]] | None = None,
 ) -> str:
-    return json.dumps({
+    payload: dict[str, object] = {
         "executive_summary": summary,
         "signal_narratives": {"narratives": narratives or {"A1": "Revenue dropped 20%."}},
-    })
+    }
+    if situation is not None:
+        payload["situation"] = situation
+    if key_story is not None:
+        payload["key_story"] = key_story
+    if watch_signals is not None:
+        payload["watch_signals"] = watch_signals
+    return json.dumps(payload)
 
 
 # ---------------------------------------------------------------------------
@@ -194,14 +204,15 @@ class TestRenderLLMSuccess:
         assert llm_result is not None
         assert llm_result.executive_summary == summary
 
-    def test_enriched_brief_contains_executive_summary(self):
+    def test_summary_mode_brief_does_not_render_legacy_executive_summary_section(self):
         findings = _make_findings()
         summary = "Revenue declined sharply this week."
         client = _SuccessClient(_valid_summary_json(summary))
         brief_md, _, _, _ = render_llm(
             findings, mode="summary", provider="anthropic", client=client
         )
-        assert summary in brief_md
+        assert "## Executive Summary" not in brief_md
+        assert "## Situation" not in brief_md
 
     def test_rendered_prompts_non_empty(self):
         findings = _make_findings()
@@ -376,6 +387,23 @@ class TestPipelineOffMode:
                 target_week=None,
             )
             mock_gen.assert_not_called()
+
+    def test_off_mode_brief_has_no_llm_sections(self, tmp_path):
+        from wbsb.pipeline import execute
+
+        execute(
+            input_path=Path("examples/sample_weekly.csv"),
+            output_dir=tmp_path,
+            llm_mode="off",
+            llm_provider="anthropic",
+            config_path=Path("config/rules.yaml"),
+            target_week=None,
+        )
+        run_dir = next(p for p in tmp_path.iterdir() if p.is_dir())
+        brief_md = (run_dir / "brief.md").read_text()
+        assert "## Situation" not in brief_md
+        assert "## Key Story This Week" not in brief_md
+        assert "## Watch Next Week" not in brief_md
 
 
 # ---------------------------------------------------------------------------
@@ -558,9 +586,19 @@ class TestRenderLLMSignalNarrativeSubstitution:
     to be silently discarded.
     """
 
-    def _full_response_with_narratives(self, rule_id: str, narrative: str) -> str:
+    def _full_response_with_narratives(
+        self,
+        rule_id: str,
+        narrative: str,
+        situation: str | None = None,
+        key_story: str | None = None,
+        watch_signals: list[dict[str, str]] | None = None,
+    ) -> str:
         return json.dumps({
             "executive_summary": "Revenue fell sharply this week.",
+            **({"situation": situation} if situation is not None else {}),
+            **({"key_story": key_story} if key_story is not None else {}),
+            **({"watch_signals": watch_signals} if watch_signals is not None else {}),
             "signal_narratives": {"narratives": {rule_id: narrative}},
         })
 
@@ -588,15 +626,91 @@ class TestRenderLLMSignalNarrativeSubstitution:
         assert llm_narrative in brief_md
         assert deterministic_narrative not in brief_md
 
-    def test_full_mode_executive_summary_also_appears_in_brief(self):
+    def test_full_mode_situation_section_renders_when_present(self):
         findings = _make_findings(signals=[_make_signal(rule_id="A1")])
         client = _SuccessClient(
-            self._full_response_with_narratives("A1", "Revenue dropped significantly.")
+            self._full_response_with_narratives(
+                "A1",
+                "Revenue dropped significantly.",
+                situation="Weekly performance softened across acquisition and revenue.",
+            )
         )
         brief_md, _, _, _ = render_llm(
             findings, mode="full", provider="anthropic", client=client
         )
-        assert "Revenue fell sharply this week." in brief_md
+        assert "## Situation" in brief_md
+        assert "Weekly performance softened across acquisition and revenue." in brief_md
+
+    def test_full_mode_key_story_hidden_without_dominant_cluster(self):
+        findings = _make_findings(
+            signals=[
+                Signal(
+                    rule_id="A1",
+                    severity="WARN",
+                    metric_id="net_revenue",
+                    label="Revenue Decline",
+                    category="revenue",
+                    priority=10,
+                    condition="delta_pct_lte",
+                    explanation="net_revenue changed -20.0% (threshold: ≤-15.0%)",
+                    evidence={
+                        "current": 8000.0,
+                        "previous": 10000.0,
+                        "delta_abs": -2000.0,
+                        "delta_pct": -0.20,
+                        "threshold": -0.15,
+                    },
+                ),
+                Signal(
+                    rule_id="B1",
+                    severity="WARN",
+                    metric_id="cac_paid",
+                    label="CAC Rising",
+                    category="acquisition",
+                    priority=8,
+                    condition="delta_pct_gte",
+                    explanation="cac_paid changed 20.0% (threshold: ≥20.0%)",
+                    evidence={
+                        "current": 180.0,
+                        "previous": 150.0,
+                        "delta_abs": 30.0,
+                        "delta_pct": 0.20,
+                        "threshold": 0.20,
+                    },
+                ),
+            ]
+        )
+        client = _SuccessClient(
+            self._full_response_with_narratives(
+                "A1",
+                "Revenue dropped significantly.",
+                key_story="This key story should not render.",
+            )
+        )
+        brief_md, _, _, _ = render_llm(
+            findings, mode="full", provider="anthropic", client=client
+        )
+        assert "## Key Story This Week" not in brief_md
+
+    def test_full_mode_watch_next_week_renders_when_present(self):
+        findings = _make_findings(signals=[_make_signal(rule_id="A1")])
+        client = _SuccessClient(
+            self._full_response_with_narratives(
+                "A1",
+                "Revenue dropped significantly.",
+                watch_signals=[
+                    {
+                        "metric_or_signal": "A1",
+                        "observation": "Revenue remained below prior week.",
+                    }
+                ],
+            )
+        )
+        brief_md, _, _, _ = render_llm(
+            findings, mode="full", provider="anthropic", client=client
+        )
+        assert "## Watch Next Week" in brief_md
+        assert "- A1 — Revenue remained below prior week." in brief_md
 
     def test_summary_mode_does_not_inject_signal_narratives(self):
         """In summary mode the LLM response has no signal_narratives; template must

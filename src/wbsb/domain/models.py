@@ -107,6 +107,11 @@ class LLMResult(BaseModel):
     fallback: bool = False
     fallback_reason: str = ""
     token_usage: dict[str, int] = Field(default_factory=dict)
+    # I5-1 section-based output fields
+    situation: str | None = None
+    key_story: str | None = None
+    group_narratives: dict[str, str] | None = None
+    watch_signals: list[dict[str, str]] | None = None
 
 
 class Manifest(BaseModel):

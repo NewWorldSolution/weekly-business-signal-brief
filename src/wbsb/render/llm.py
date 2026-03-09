@@ -37,12 +37,11 @@ def _adapter_to_domain(adapter_result: llm_adapter.AdapterLLMResult) -> LLMResul
 
 
 def _build_enriched_brief(findings: Findings, llm_result: LLMResult) -> str:
-    """Render the brief with LLM executive summary and per-signal narrative overrides.
+    """Render the brief with LLM section overlays and per-signal overrides.
 
-    Delegates to render_template() with llm_result so both the executive
-    summary and signal_narratives are injected into the Jinja2 context.
-    The template prefers the LLM narrative for each matching rule_id and
-    falls back to the deterministic narrative for any that are missing.
+    Delegates to render_template() with llm_result so all section fields
+    (situation, key_story, group_narratives, signal_narratives, watch_signals)
+    are injected into the Jinja2 context.
     """
     return render_template(findings, llm_result)
 

@@ -7,10 +7,18 @@
 **Period:** Week of {{ findings.periods.current_week_start }} → {{ findings.periods.current_week_end }}
 **vs. Prior Week:** {{ findings.periods.previous_week_start }} → {{ findings.periods.previous_week_end }}
 
-{% if executive_summary %}
-## Executive Summary
+{% if situation %}
+## Situation
 
-{{ executive_summary }}
+{{ situation }}
+
+---
+{% endif %}
+
+{% if key_story and dominant_cluster_exists %}
+## Key Story This Week
+
+{{ key_story }}
 
 ---
 {% endif %}
@@ -43,6 +51,10 @@
 {% if signal_contexts %}
 {% for category, cat_scs in signal_contexts | groupby('category') %}
 **{{ category_labels.get(category, category) }}**
+{% if group_narratives.get(category) %}
+
+{{ group_narratives.get(category) }}
+{% endif %}
 
 {% for sc in cat_scs %}
 {%- set ev = sc.signal.evidence %}
@@ -71,6 +83,16 @@
 {% endfor %}
 {% else %}
 No signals fired this week. All metrics within thresholds.
+
+---
+{% endif %}
+
+{% if watch_signals %}
+## Watch Next Week
+
+{% for entry in watch_signals %}
+- {{ entry.metric_or_signal }} — {{ entry.observation }}
+{% endfor %}
 
 ---
 {% endif %}
