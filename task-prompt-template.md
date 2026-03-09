@@ -11,14 +11,15 @@ HOW TO USE THIS TEMPLATE
 6. Send the completed file as the full prompt.
 
 PLACEHOLDER KEY
-  {{TASK_ID}}           e.g. I6-2
-  {{TASK_TITLE}}        e.g. History Store and Dataset-Scoped HistoryReader
-  {{OWNER}}             Claude | Codex
-  {{ITERATION}}         e.g. Iteration 6 — Historical Memory & Trend Awareness
-  {{FEATURE_BRANCH}}    e.g. feature/i6-2-history-store
-  {{DEPENDS_ON}}        e.g. I6-1 | none
-  {{BLOCKS}}            e.g. I6-3, I6-4 | none
-  {{TEST_COUNT}}        current passing test count, e.g. 217
+  {{TASK_ID}}             e.g. I6-2
+  {{TASK_TITLE}}          e.g. History Store and Dataset-Scoped HistoryReader
+  {{OWNER}}               Claude | Codex
+  {{ITERATION}}           e.g. Iteration 6 — Historical Memory & Trend Awareness
+  {{ITERATION_BRANCH}}    e.g. iteration-6   (used as feature/iteration-6)
+  {{FEATURE_BRANCH}}      e.g. feature/i6-2-history-store
+  {{DEPENDS_ON}}          e.g. I6-1 | none
+  {{BLOCKS}}              e.g. I6-3, I6-4 | none
+  {{TEST_COUNT}}          current passing test count, e.g. 217
 -->
 
 ---
@@ -46,7 +47,7 @@ CSV/XLSX → Loader → Validator → Metrics → Deltas → Rules Engine → Fi
 
 <!-- [FILL IN] Update these values at task start -->
 
-- **Active branch:** `main` (all prior tasks merged)
+- **Iteration integration branch:** `feature/{{ITERATION_BRANCH}}` (base for all tasks in this iteration)
 - **Feature branch for this task:** `{{FEATURE_BRANCH}}`
 - **Tests passing:** {{TEST_COUNT}}
 - **Ruff:** clean
@@ -419,40 +420,57 @@ After this task merges, the following will be available for `{{BLOCKS}}`:
 
 Follow this sequence exactly. Do not skip or reorder steps.
 
-### Step 0 — Branch setup (before anything else)
+### Step 0 — Branch setup and draft PR (before anything else)
 
 This project uses a **per-iteration integration branch**. Task branches are created from the
 iteration branch — not from `main` — and PRs target the iteration branch.
 
 ```
 main
- └── feature/{{ITERATION_BRANCH}}     ← base for all tasks in this iteration
-      └── {{FEATURE_BRANCH}}          ← this task's branch
+ └── feature/{{ITERATION_BRANCH}}     ← integration branch (base for all tasks)
+      └── {{FEATURE_BRANCH}}          ← this task's branch → PR → feature/{{ITERATION_BRANCH}}
 ```
 
 ```bash
-# Start from the iteration integration branch, not main
+# 1. Start from the iteration integration branch, not main
 git checkout feature/{{ITERATION_BRANCH}}
 git pull origin feature/{{ITERATION_BRANCH}}
 
-# Confirm the working tree is clean before branching
+# 2. Confirm the working tree is clean before branching
 git status
 # Expected: "nothing to commit, working tree clean"
 # If not clean: stop and resolve before continuing
 
-# Create and switch to the feature branch for this task
+# 3. Create and switch to the feature branch for this task
 git checkout -b {{FEATURE_BRANCH}}
 
-# Confirm you are on the right branch
+# 4. Confirm you are on the right branch
 git branch --show-current
 # Expected: {{FEATURE_BRANCH}}
+
+# 5. Push the branch immediately so the PR can be created
+git push -u origin {{FEATURE_BRANCH}}
+
+# 6. Open a DRAFT PR right now — before writing any code
+gh pr create \
+  --base feature/{{ITERATION_BRANCH}} \
+  --head {{FEATURE_BRANCH}} \
+  --title "{{TASK_ID}}: {{TASK_TITLE}}" \
+  --body "Work in progress. See prompt file for full task spec." \
+  --draft
+# Expected: GitHub URL of the new draft PR
 ```
+
+**Why open a draft PR before writing code:**
+The PR must exist before any work is merged. Opening it as a draft immediately after branching
+guarantees this — it can never be skipped or forgotten.
 
 If the branch already exists (e.g. you are resuming work):
 ```bash
 git checkout {{FEATURE_BRANCH}}
 git status
 # Confirm no unexpected changes before resuming
+# If a draft PR already exists, continue — do not open a second one
 ```
 
 ### Step 1 — Verify the baseline
@@ -509,16 +527,20 @@ Every file in the output must appear in the "Allowed Files" list. If any unexpec
 
 Use the commit message format defined below. One commit per logical unit of work.
 
-### Step 9 — Push and open PR
+### Step 9 — Mark PR ready for review
+
+The draft PR was already opened in Step 0. Now that the work is complete and tests pass,
+mark it ready for review:
 
 ```bash
-git push -u origin {{FEATURE_BRANCH}}
+gh pr ready {{FEATURE_BRANCH}}
 ```
 
-Open a PR from `{{FEATURE_BRANCH}}` into `feature/{{ITERATION_BRANCH}}` — **not into `main`**.
-Do not merge — merging is a human decision.
+Then add a summary comment to the PR describing what was built, what was tested, and any
+decisions made during implementation. Do not merge — merging is a human decision.
 
-`main` is only updated when the full iteration is complete and has passed the architecture review.
+`main` is only updated once via a single PR from `feature/{{ITERATION_BRANCH}}` after the
+full iteration review passes.
 
 ---
 

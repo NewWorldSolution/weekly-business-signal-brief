@@ -47,6 +47,49 @@ I6-8  [Claude]   Final cleanup + merge to main   → depends on I6-7
 
 ---
 
+## Per-Task Workflow (follow exactly for every task)
+
+```bash
+# 1. Start from the iteration branch
+git checkout feature/iteration-6
+git pull origin feature/iteration-6
+git status                          # must be clean
+
+# 2. Create and push the task branch
+git checkout -b feature/i6-N-description
+git push -u origin feature/i6-N-description
+
+# 3. Open a DRAFT PR immediately — before writing any code
+gh pr create \
+  --base feature/iteration-6 \
+  --head feature/i6-N-description \
+  --title "I6-N: Task title" \
+  --body "Work in progress. See prompt file for full task spec." \
+  --draft
+
+# 4. Verify baseline before touching anything
+pytest                              # must pass
+ruff check .                        # must be clean
+
+# 5. Implement, then test and lint again
+pytest && ruff check .
+
+# 6. Verify scope
+git diff --name-only feature/iteration-6
+# Only allowed files should appear
+
+# 7. Commit and push
+git push origin feature/i6-N-description
+
+# 8. Mark PR ready for review
+gh pr ready feature/i6-N-description
+```
+
+**Note on I6-1:** I6-1 was merged into `feature/iteration-6` before this workflow was established.
+It is the only task without a task-level PR. All tasks from I6-2 onwards follow the steps above.
+
+---
+
 ## Task Summary
 
 | Task | Owner | Description | Depends on |
