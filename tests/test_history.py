@@ -194,7 +194,10 @@ def test_history_reader_respects_n_weeks_limit(tmp_path):
     reader = HistoryReader(index_path, dataset_key="weekly_data")
     results = reader.get_metric_history("net_revenue", n_weeks=3)
 
+    # Should return the 3 most-recent weeks (i=3,4,5) in oldest-first order
     assert len(results) == 3
+    assert [r[0] for r in results] == ["2026-04-01", "2026-05-01", "2026-06-01"]
+    assert [r[1] for r in results] == [300.0, 400.0, 500.0]
 
 
 def test_history_reader_skips_missing_findings(tmp_path):

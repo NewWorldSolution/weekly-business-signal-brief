@@ -136,8 +136,12 @@ def register_run(run: RunRecord, index_path: Path) -> None:
         if tmp_path is not None:
             try:
                 os.unlink(tmp_path)
-            except OSError:
-                pass
+            except OSError as exc:
+                logger.warning(
+                    "history.register_run.cleanup_failed: could not remove temp file %s: %s",
+                    tmp_path,
+                    exc,
+                )
 
     # Emit audit event via logging
     audit_event = AuditEvent(
