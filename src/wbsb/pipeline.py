@@ -129,6 +129,7 @@ def execute(
                 trend_context = compute_trends(
                     history_reader,
                     metric_ids=signal_metric_ids,
+                    before_week_start=week_start.isoformat(),
                 )
             except Exception as exc:
                 log.error("trends.compute.error", error=str(exc))
