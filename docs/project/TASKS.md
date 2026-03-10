@@ -61,9 +61,9 @@ Full task detail: see `../iterations/iteration-6-tasks.md`.
 | I6-2 | Claude | History store + dataset-scoped HistoryReader | ✅ Done — PR #27 ready |
 | I6-3 | Claude | Register completed runs in pipeline | ✅ Done — PR #28 ready |
 | I6-4 | Claude | Deterministic trend engine (6 labels) | ✅ Done — PR #29 merged |
-| I6-5 | Claude | Extend LLM adapter with trend context | ✅ Done — PR #30 ready |
-| I6-6 | Codex | Update prompt template for trend context | 🔲 Next — depends on I6-5 |
-| I6-7 | You | Architecture review checklist | 🔲 Blocked on I6-6 |
+| I6-5 | Claude | Extend LLM adapter with trend context | ✅ Done — PR #30 merged |
+| I6-6 | Codex | Update prompt template for trend context | ✅ Done — PR #31 merged |
+| I6-7 | You | Architecture review checklist | 🔲 Next — depends on I6-6 |
 | I6-8 | Claude | Final cleanup + merge to main | 🔲 Blocked on I6-7 |
 
 ---
