@@ -30,6 +30,15 @@ BUSINESS MECHANISM CHAINS
 {% endif %}
 {% endfor %}
 
+{% if trend_context_for_prompt %}
+TREND CONTEXT
+
+{% for entry in trend_context_for_prompt %}
+{{ entry.metric_id }} — {{ entry.trend_label }}{% if entry.weeks_consecutive > 0 %} | {{ entry.weeks_consecutive }} consecutive weeks{% endif %}{% if entry.baseline_delta_pct is not none %} | {{ "%+.1f%%" | format(entry.baseline_delta_pct * 100) }} vs baseline{% endif %}
+
+{% endfor %}
+{% endif %}
+
 SIGNALS GROUPED BY CATEGORY
 {% if grouped_signals %}
 {% for group in grouped_signals %}
