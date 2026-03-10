@@ -130,3 +130,36 @@ def test_pipeline_second_run_appends_index(tmp_path):
     entries = json.loads(index_path.read_text())
     assert len(entries) == 2, f"Expected 2 entries after two runs, got {len(entries)}"
     assert entries[0]["run_id"] != entries[1]["run_id"], "Each run must have a unique run_id"
+
+
+def test_pipeline_passes_trend_context_to_render(tmp_path, monkeypatch):
+    """Pipeline must call render_llm with a trend_context keyword argument."""
+    captured: list[dict] = []
+
+    import wbsb.pipeline as pipeline_module
+    original_render_llm = pipeline_module.render_llm
+
+    def _capturing_render_llm(**kwargs):
+        captured.append(kwargs)
+        return original_render_llm(**kwargs)
+
+    monkeypatch.setattr(pipeline_module, "render_llm", _capturing_render_llm)
+
+    exit_code = pipeline_module.execute(
+        input_path=CLEAN_DATASET,
+        output_dir=tmp_path,
+        llm_mode="full",
+        llm_provider="anthropic",
+        config_path=CONFIG_PATH,
+        target_week=None,
+    )
+
+    # Pipeline may fall back gracefully (no API key in test env); exit code 0 either way
+    assert exit_code == 0, f"Pipeline returned non-zero exit code: {exit_code}"
+    assert len(captured) == 1, "render_llm must be called exactly once"
+    assert "trend_context" in captured[0], (
+        "render_llm must receive trend_context keyword argument"
+    )
+    assert isinstance(captured[0]["trend_context"], dict), (
+        "trend_context must be a dict"
+    )

@@ -56,6 +56,7 @@ def render_llm(
     mode: str,
     provider: str,
     client: LLMClientProtocol | None = None,
+    trend_context: dict | None = None,
 ) -> tuple[str, LLMResult | None, str, str]:
     """Render the brief using an LLM overlay with deterministic fallback.
 
@@ -83,7 +84,7 @@ def render_llm(
     rendered_system_prompt = ""
     rendered_user_prompt = ""
     try:
-        prompt_inputs = llm_adapter.build_prompt_inputs(ctx)
+        prompt_inputs = llm_adapter.build_prompt_inputs(ctx, trend_context=trend_context)
         rendered_system_prompt = llm_adapter.render_system_prompt(mode)
         rendered_user_prompt = llm_adapter.render_user_prompt(prompt_inputs, mode)
     except Exception as exc:  # noqa: BLE001
@@ -91,7 +92,9 @@ def render_llm(
         return render_template(findings), None, "", ""
 
     # Delegate to adapter — returns None on any failure; never raises.
-    adapter_result = llm_adapter.generate(ctx, mode=mode, provider=provider, client=client)
+    adapter_result = llm_adapter.generate(
+        ctx, mode=mode, provider=provider, client=client, trend_context=trend_context
+    )
 
     if adapter_result is None:
         logger.info("render_llm: adapter returned None, using deterministic fallback")
