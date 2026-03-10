@@ -243,7 +243,10 @@ class AnthropicClient:
 # ---------------------------------------------------------------------------
 
 
-def build_prompt_inputs(ctx: dict[str, Any]) -> dict[str, Any]:
+def build_prompt_inputs(
+    ctx: dict[str, Any],
+    trend_context: dict | None = None,
+) -> dict[str, Any]:
     """Extract serializable LLM-relevant fields from the deterministic render context.
 
     This is the boundary between the deterministic pipeline context and the LLM
@@ -323,6 +326,8 @@ def build_prompt_inputs(ctx: dict[str, Any]) -> dict[str, Any]:
     )
 
     return {
+        # Trend context (filtered, no direction_sequence, no insufficient_history)
+        "trend_context_for_prompt": _build_trend_context_for_prompt(trend_context or {}),
         # Period info
         "generated_at": run.generated_at.isoformat(),
         "current_week_start": str(periods.current_week_start),
@@ -349,6 +354,27 @@ def build_prompt_inputs(ctx: dict[str, Any]) -> dict[str, Any]:
         "rule_ids": rule_ids,
         "metric_ids": metric_ids,
     }
+
+
+def _build_trend_context_for_prompt(trend_context: dict) -> list[dict[str, Any]]:
+    """Filter and serialize trend context for the LLM prompt.
+
+    Rules:
+    - Remove entries where trend_label == "insufficient_history".
+    - Exclude direction_sequence (raw array, never sent to LLM).
+    - Return [] if no valid entries remain.
+    """
+    result = []
+    for entry in trend_context.values():
+        if entry.get("trend_label") == "insufficient_history":
+            continue
+        result.append({
+            "metric_id": entry["metric_id"],
+            "trend_label": entry["trend_label"],
+            "weeks_consecutive": entry["weeks_consecutive"],
+            "baseline_delta_pct": entry["baseline_delta_pct"],
+        })
+    return result
 
 
 def _group_signals_by_category(all_signal_inputs: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -770,6 +796,7 @@ def generate(
     mode: str,
     provider: str,
     client: LLMClientProtocol | None = None,
+    trend_context: dict | None = None,
 ) -> AdapterLLMResult | None:
     """Generate an LLM narrative overlay from the deterministic render context.
 
@@ -810,7 +837,7 @@ def generate(
             return None
 
     try:
-        prompt_inputs = build_prompt_inputs(ctx)
+        prompt_inputs = build_prompt_inputs(ctx, trend_context=trend_context)
         system_prompt = render_system_prompt(mode)
         user_prompt = render_user_prompt(prompt_inputs, mode)
         raw = resolved_client.complete(system_prompt, user_prompt, timeout=30)

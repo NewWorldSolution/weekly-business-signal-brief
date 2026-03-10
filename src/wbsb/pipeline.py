@@ -9,7 +9,8 @@ from pathlib import Path
 from wbsb.domain.models import RunConfig
 from wbsb.export.write import write_artifacts
 from wbsb.findings.build import build_findings
-from wbsb.history.store import RunRecord, derive_dataset_key, register_run
+from wbsb.history.store import HistoryReader, RunRecord, derive_dataset_key, register_run
+from wbsb.history.trends import compute_trends
 from wbsb.ingest.loader import load_data
 from wbsb.observability.logging import get_logger, init_run_logger
 from wbsb.render.llm import render_llm
@@ -120,11 +121,26 @@ def execute(
             log.info("render.template")
             brief_md = render_template(findings)
         else:
+            # Compute trend context from historical signal metrics
+            index_path = output_dir / "index.json"
+            history_reader = HistoryReader(index_path=index_path, dataset_key=dataset_key)
+            signal_metric_ids = list({s.metric_id for s in findings.signals if s.metric_id})
+            try:
+                trend_context = compute_trends(
+                    history_reader,
+                    metric_ids=signal_metric_ids,
+                    before_week_start=week_start.isoformat(),
+                )
+            except Exception as exc:
+                log.error("trends.compute.error", error=str(exc))
+                trend_context = {}
+
             log.info("render.llm", mode=llm_mode, provider=llm_provider)
             brief_md, llm_result, rendered_system_prompt, rendered_user_prompt = render_llm(
                 findings=findings,
                 mode=llm_mode,
                 provider=llm_provider,
+                trend_context=trend_context,
             )
             if llm_result is None:
                 log.info("render.llm.fallback", mode=llm_mode, provider=llm_provider)

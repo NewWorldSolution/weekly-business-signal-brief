@@ -179,6 +179,7 @@ def compute_trends(
     history_reader,
     metric_ids: list[str],
     n_weeks: int | None = None,
+    before_week_start: str | None = None,
 ) -> dict[str, TrendResult]:
     """Compute deterministic trend labels for a list of metric IDs.
 
@@ -186,6 +187,9 @@ def compute_trends(
         history_reader: HistoryReader already scoped to a dataset_key.
         metric_ids: Metric IDs to classify. Empty list returns {}.
         n_weeks: Lookback window. Defaults to config value when None.
+        before_week_start: If given, only include history entries strictly
+            before this ISO date string. Use to exclude the current week
+            when calling from within the pipeline (prevents rerun leakage).
 
     Returns:
         Dict mapping metric_id → TrendResult. Never raises — returns
@@ -202,7 +206,7 @@ def compute_trends(
 
     for metric_id in metric_ids:
         history = history_reader.get_metric_history(
-            metric_id, n_weeks=effective_n_weeks
+            metric_id, n_weeks=effective_n_weeks, before_week_start=before_week_start
         )
         values = [v for _, v in history]
 
