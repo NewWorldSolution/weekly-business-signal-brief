@@ -48,7 +48,7 @@ Give the system memory across weeks. Every report today is stateless — it comp
 ## Goal
 Pass multi-week trend facts to the LLM so it can produce situation summaries and key stories that reference trajectory — not just this-week delta.
 
-Full task detail: see `iteration-6-tasks.md`.
+Full task detail: see `../iterations/iteration-6-tasks.md`.
 
 ---
 

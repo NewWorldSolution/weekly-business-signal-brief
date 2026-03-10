@@ -125,7 +125,7 @@ Rules are fully config-driven via `config/rules.yaml`. No hardcoded thresholds i
 - Work is executed one task at a time (one task per PR unless explicitly approved).
 - Use Plan Mode for any change that touches multiple files or changes behavior.
 - Before editing: confirm which files will be modified.
-- Only modify files explicitly allowed by the current task (see TASKS.md or the user prompt).
+- Only modify files explicitly allowed by the current task (see `docs/project/TASKS.md` or the user prompt).
 - If additional files seem necessary, STOP and ask before changing them.
 - After implementing: run `pytest` and `ruff check .` and report results.
 
@@ -180,5 +180,5 @@ This prevents the situation where a branch is merged into the integration branch
 
 ## Task Source of Truth
 
-- TASKS.md defines the current iteration tasks and allowed-file boundaries.
+- `docs/project/TASKS.md` defines the current iteration tasks and allowed-file boundaries.
 - CLAUDE.md defines permanent architecture and working rules.
