@@ -1,8 +1,8 @@
 # Iteration 6 — Historical Memory & Trend Awareness
 ## Detailed Task Plan
 
-**Status:** I6-0 through I6-4 complete. PRs #27 (I6-2), #28 (I6-3), #29 (I6-4) ready for review into `feature/iteration-6`. I6-5 is next (blocked on I6-3 + I6-4 review).
-**Baseline:** 262 tests passing, ruff clean.
+**Status:** I6-0 through I6-5 complete. PRs #27 (I6-2), #28 (I6-3), #29 (I6-4) merged into `feature/iteration-6`. PR #30 (I6-5) ready for review. I6-6 is next (Codex — prompt template update).
+**Baseline:** 269 tests passing, ruff clean.
 
 ---
 
@@ -37,7 +37,7 @@ I6-1  [Codex]    Config — history: section      ✅ DONE (merged to feature/it
 I6-2  [Claude]   History store + HistoryReader  ✅ DONE (PR #27 ready — 18 tests, 235 total)
 I6-3  [Claude]   Pipeline integration           ✅ DONE (PR #28 ready — 7 tests, 242 total)
 I6-4  [Claude]   Trend engine                   ✅ DONE (PR #29 ready — 20 tests, 262 total)
-I6-5  [Claude]   LLM adapter extension          → depends on I6-3 + I6-4
+I6-5  [Claude]   LLM adapter extension          ✅ DONE (PR #30 ready — 7 tests, 269 total)
 I6-6  [Codex]    Prompt template update         → depends on I6-5
 I6-7  [You]      Architecture review            → depends on I6-6
 I6-8  [Claude]   Final cleanup + merge to main  → depends on I6-7

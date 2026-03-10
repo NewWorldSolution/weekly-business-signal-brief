@@ -60,9 +60,9 @@ Full task detail: see `../iterations/iteration-6-tasks.md`.
 | I6-1 | Codex | Add `history:` section to `config/rules.yaml` | ✅ Done — merged to `feature/iteration-6` |
 | I6-2 | Claude | History store + dataset-scoped HistoryReader | ✅ Done — PR #27 ready |
 | I6-3 | Claude | Register completed runs in pipeline | ✅ Done — PR #28 ready |
-| I6-4 | Claude | Deterministic trend engine (6 labels) | 🔲 Next — depends on I6-2 |
-| I6-5 | Claude | Extend LLM adapter with trend context | 🔲 Blocked on I6-3 + I6-4 |
-| I6-6 | Codex | Update prompt template for trend context | 🔲 Blocked on I6-5 |
+| I6-4 | Claude | Deterministic trend engine (6 labels) | ✅ Done — PR #29 merged |
+| I6-5 | Claude | Extend LLM adapter with trend context | ✅ Done — PR #30 ready |
+| I6-6 | Codex | Update prompt template for trend context | 🔲 Next — depends on I6-5 |
 | I6-7 | You | Architecture review checklist | 🔲 Blocked on I6-6 |
 | I6-8 | Claude | Final cleanup + merge to main | 🔲 Blocked on I6-7 |
 
@@ -76,8 +76,8 @@ main
       ├── feature/i6-1-history-config         (merged ✅)
       ├── feature/i6-2-history-store          (PR #27 ready ✅)
       ├── feature/i6-3-pipeline-integration   (PR #28 ready ✅)
-      ├── feature/i6-4-trend-engine           ← next task branch
-      ├── feature/i6-5-llm-trend-context
+      ├── feature/i6-4-trend-engine           (merged ✅)
+      ├── feature/i6-5-llm-trend-context      (PR #30 ready ✅)
       └── feature/i6-6-prompt-template
 ```
 
@@ -100,37 +100,43 @@ main
 
 ---
 
-## Next: I6-4 — Deterministic Trend Engine
+## Completed Tasks (continued)
 
-### Purpose
-Classify each signal metric's direction over prior N weeks into one of six deterministic labels. Pure arithmetic — no interpretation, no LLM.
+### I6-4 — Trend Engine (PR #29)
+- `src/wbsb/history/trends.py` — `compute_trends()`, `TrendResult`, 6 deterministic labels
+- `tests/test_history.py` — 20 new trend classification tests (moved from test_trends.py after scope review)
+- Tests: 242 → 262
 
-### What to Build
-- `src/wbsb/history/trends.py` — `compute_trends(history_reader, metric_ids, n_weeks=None) -> dict[str, TrendResult]`
-- Six labels: `rising` | `falling` | `recovering` | `volatile` | `stable` | `insufficient_history`
-- All thresholds from `config/rules.yaml` → `history:` section (already added in I6-1)
-- `insufficient_history` returned as explicit label when fewer than 2 prior data points
+### I6-5 — LLM Adapter Extension (PR #30)
+- `src/wbsb/pipeline.py` — `HistoryReader`, `compute_trends()` call, `trend_context` → `render_llm()`
+- `src/wbsb/render/llm.py` — `trend_context` param threaded to `build_prompt_inputs()` and `generate()`
+- `src/wbsb/render/llm_adapter.py` — `build_prompt_inputs(ctx, trend_context)`, `_build_trend_context_for_prompt()`, `generate(ctx, ..., trend_context)`
+- `tests/test_llm_adapter.py` — 6 unit tests for trend context filtering
+- `tests/test_pipeline_history.py` — 1 pipeline integration test
+- Tests: 262 → 269
 
-### Allowed Files
-```
-src/wbsb/history/trends.py         ← new
-tests/test_trends.py               ← new
-```
+---
+
+## Next: I6-6 — Prompt Template Update (Codex)
+
+Add TREND CONTEXT block to `src/wbsb/render/prompts/user_full_v2.j2`.
+Receives `trend_context_for_prompt` list from `build_prompt_inputs()`.
+Omit block entirely when list is empty.
 
 ---
 
 ## Iteration 6 — Definition of Done
 
-- [ ] `runs/index.json` created/updated after every successful pipeline run — I6-2, I6-3
-- [ ] Each entry has all `RunRecord` fields with correct types — I6-2, I6-3
-- [ ] Failed runs never produce index entries — I6-3
-- [ ] Dataset isolation enforced — I6-2
-- [ ] All six trend labels computed correctly — I6-4
-- [ ] Zero hardcoded thresholds in `trends.py` — I6-4
-- [ ] Trend context in LLM prompt when valid history exists — I6-5, I6-6
-- [ ] TREND CONTEXT absent on first run and when all `insufficient_history` — I6-5, I6-6
-- [ ] `direction_sequence` never sent to LLM — I6-5
-- [ ] All 242+ tests passing — ongoing
+- [x] `runs/index.json` created/updated after every successful pipeline run — I6-2, I6-3
+- [x] Each entry has all `RunRecord` fields with correct types — I6-2, I6-3
+- [x] Failed runs never produce index entries — I6-3
+- [x] Dataset isolation enforced — I6-2
+- [x] All six trend labels computed correctly — I6-4
+- [x] Zero hardcoded thresholds in `trends.py` — I6-4
+- [x] `direction_sequence` never sent to LLM — I6-5
+- [ ] Trend context in LLM prompt when valid history exists — I6-5 ✅ wired, I6-6 template pending
+- [ ] TREND CONTEXT absent on first run and when all `insufficient_history` — I6-5 ✅ filtered, I6-6 template pending
+- [ ] All 269+ tests passing — ongoing
 - [ ] Ruff clean — ongoing
 - [ ] `runs/index.json` in `.gitignore` — I6-8
 - [ ] `main` branch stable — I6-8
