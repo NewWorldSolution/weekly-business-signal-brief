@@ -423,9 +423,9 @@ weekly-business-signal-brief/
 ├── examples/datasets/            # 10 synthetic test datasets
 ├── runs/                         # Output directory (one folder per run)
 ├── tests/                        # pytest test suite (217 tests)
-├── project-iterations.md         # Full roadmap (I1–I10)
-├── iteration-5-summary.md        # Iteration 5 detailed summary
-└── HOW_IT_WORKS.md               # This file
+├── docs/project/project-iterations.md   # Full roadmap (I1–I10)
+├── docs/iterations/iteration-5-summary.md # Iteration 5 detailed summary
+└── docs/project/HOW_IT_WORKS.md         # This file
 ```
 
 ---

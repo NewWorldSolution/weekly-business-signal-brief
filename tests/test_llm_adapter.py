@@ -1096,3 +1096,81 @@ class TestLLMClientProtocol:
 
     def test_mock_api_error_client_is_protocol(self):
         assert isinstance(MockAPIErrorClient(), LLMClientProtocol)
+
+
+# ---------------------------------------------------------------------------
+# G. Trend context — build_prompt_inputs (I6-5)
+# ---------------------------------------------------------------------------
+
+
+def _make_trend_entry(
+    metric_id: str = "net_revenue",
+    trend_label: str = "rising",
+    weeks_consecutive: int = 3,
+    baseline_delta_pct: float | None = 0.12,
+) -> dict:
+    return {
+        "metric_id": metric_id,
+        "trend_label": trend_label,
+        "weeks_consecutive": weeks_consecutive,
+        "baseline_delta_pct": baseline_delta_pct,
+        "direction_sequence": ["up", "up", "up"],  # must never reach LLM
+    }
+
+
+class TestTrendContextPromptInputs:
+    def _ctx(self) -> dict:
+        return _make_ctx(signals=[_make_signal()])
+
+    def test_build_prompt_inputs_no_trend_context(self):
+        """Omitting trend_context yields empty list under trend_context_for_prompt."""
+        inputs = build_prompt_inputs(self._ctx())
+        assert "trend_context_for_prompt" in inputs
+        assert inputs["trend_context_for_prompt"] == []
+
+    def test_build_prompt_inputs_trend_context_empty_dict(self):
+        """Explicit empty dict yields empty list."""
+        inputs = build_prompt_inputs(self._ctx(), trend_context={})
+        assert inputs["trend_context_for_prompt"] == []
+
+    def test_build_prompt_inputs_filters_insufficient_history(self):
+        """Entries with trend_label='insufficient_history' are excluded."""
+        trend_context = {
+            "net_revenue": _make_trend_entry(trend_label="insufficient_history"),
+        }
+        inputs = build_prompt_inputs(self._ctx(), trend_context=trend_context)
+        assert inputs["trend_context_for_prompt"] == []
+
+    def test_build_prompt_inputs_valid_trend_entries(self):
+        """Valid trend entries appear in prompt output with correct fields."""
+        trend_context = {
+            "net_revenue": _make_trend_entry(trend_label="rising", weeks_consecutive=3),
+        }
+        inputs = build_prompt_inputs(self._ctx(), trend_context=trend_context)
+        result = inputs["trend_context_for_prompt"]
+        assert len(result) == 1
+        entry = result[0]
+        assert entry["metric_id"] == "net_revenue"
+        assert entry["trend_label"] == "rising"
+        assert entry["weeks_consecutive"] == 3
+        assert entry["baseline_delta_pct"] == 0.12
+
+    def test_build_prompt_inputs_excludes_direction_sequence(self):
+        """direction_sequence must never appear in prompt output."""
+        trend_context = {
+            "net_revenue": _make_trend_entry(trend_label="falling"),
+        }
+        inputs = build_prompt_inputs(self._ctx(), trend_context=trend_context)
+        for entry in inputs["trend_context_for_prompt"]:
+            assert "direction_sequence" not in entry
+
+    def test_trend_context_empty_when_all_insufficient(self):
+        """All entries insufficient → empty list."""
+        trend_context = {
+            "net_revenue": _make_trend_entry(trend_label="insufficient_history"),
+            "cac_paid": _make_trend_entry(
+                metric_id="cac_paid", trend_label="insufficient_history"
+            ),
+        }
+        inputs = build_prompt_inputs(self._ctx(), trend_context=trend_context)
+        assert inputs["trend_context_for_prompt"] == []

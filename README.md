@@ -216,10 +216,10 @@ Current state: 217 tests passing · Ruff clean · All thresholds configurable vi
 
 | Document | Audience | Description |
 |---|---|---|
-| [`HOW_IT_WORKS.md`](HOW_IT_WORKS.md) | Developers / operators | Full system guide — pipeline, metrics, signals, CLI reference, artifacts |
-| [`PROJECT_BRIEF.md`](PROJECT_BRIEF.md) | Clients / investors / stakeholders | Business-oriented product brief — problem, value, vision, roadmap |
-| [`project-iterations.md`](project-iterations.md) | Product / engineering | Full iteration roadmap with task breakdowns and acceptance criteria |
-| [`iteration-5-summary.md`](iteration-5-summary.md) | Engineering | Detailed I5 summary — what was built, bugs fixed, model comparison |
+| [`docs/project/HOW_IT_WORKS.md`](docs/project/HOW_IT_WORKS.md) | Developers / operators | Full system guide — pipeline, metrics, signals, CLI reference, artifacts |
+| [`docs/project/PROJECT_BRIEF.md`](docs/project/PROJECT_BRIEF.md) | Clients / investors / stakeholders | Business-oriented product brief — problem, value, vision, roadmap |
+| [`docs/project/project-iterations.md`](docs/project/project-iterations.md) | Product / engineering | Full iteration roadmap with task breakdowns and acceptance criteria |
+| [`docs/iterations/iteration-5-summary.md`](docs/iterations/iteration-5-summary.md) | Engineering | Detailed I5 summary — what was built, bugs fixed, model comparison |
 | [`CLAUDE.md`](CLAUDE.md) | Contributors | Architecture rules, coding constraints, working conventions |
 
 ---

@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import sys
 import time
-from datetime import UTC
+from datetime import UTC, timedelta
 from pathlib import Path
 
 from wbsb.domain.models import RunConfig
 from wbsb.export.write import write_artifacts
 from wbsb.findings.build import build_findings
+from wbsb.history.store import HistoryReader, RunRecord, derive_dataset_key, register_run
+from wbsb.history.trends import compute_trends
 from wbsb.ingest.loader import load_data
 from wbsb.observability.logging import get_logger, init_run_logger
 from wbsb.render.llm import render_llm
@@ -82,6 +84,9 @@ def execute(
         week_start, prev_week_start = resolve_target_week(df, target_week)
         log.info("weeks.resolved", current=str(week_start), previous=str(prev_week_start))
 
+        dataset_key = derive_dataset_key(input_path)
+        week_end = week_start + timedelta(days=6)
+
         run_config = RunConfig(
             min_prev_net_revenue=raw_config["defaults"]["min_prev_net_revenue"],
             volume_threshold=raw_config["defaults"]["volume_threshold"],
@@ -116,11 +121,26 @@ def execute(
             log.info("render.template")
             brief_md = render_template(findings)
         else:
+            # Compute trend context from historical signal metrics
+            index_path = output_dir / "index.json"
+            history_reader = HistoryReader(index_path=index_path, dataset_key=dataset_key)
+            signal_metric_ids = list({s.metric_id for s in findings.signals if s.metric_id})
+            try:
+                trend_context = compute_trends(
+                    history_reader,
+                    metric_ids=signal_metric_ids,
+                    before_week_start=week_start.isoformat(),
+                )
+            except Exception as exc:
+                log.error("trends.compute.error", error=str(exc))
+                trend_context = {}
+
             log.info("render.llm", mode=llm_mode, provider=llm_provider)
             brief_md, llm_result, rendered_system_prompt, rendered_user_prompt = render_llm(
                 findings=findings,
                 mode=llm_mode,
                 provider=llm_provider,
+                trend_context=trend_context,
             )
             if llm_result is None:
                 log.info("render.llm.fallback", mode=llm_mode, provider=llm_provider)
@@ -148,6 +168,25 @@ def execute(
             llm_provider=llm_provider,
             rendered_system_prompt=rendered_system_prompt,
             rendered_user_prompt=rendered_user_prompt,
+        )
+
+        run_record: RunRecord = {
+            "run_id": run_id,
+            "dataset_key": dataset_key,
+            "input_file": str(input_path),
+            "week_start": week_start.isoformat(),
+            "week_end": week_end.isoformat(),
+            "signal_count": len(findings.signals),
+            "findings_path": str(run_dir / "findings.json"),
+            "registered_at": datetime.now(UTC).isoformat(),
+        }
+        index_path = output_dir / "index.json"
+        register_run(run_record, index_path)
+        log.info(
+            "history.registered",
+            run_id=run_id,
+            dataset_key=dataset_key,
+            index=str(index_path),
         )
 
         log.info("pipeline.done", run_dir=str(run_dir), elapsed_seconds=round(elapsed, 3))

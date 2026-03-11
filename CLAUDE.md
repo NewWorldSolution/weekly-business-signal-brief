@@ -125,7 +125,7 @@ Rules are fully config-driven via `config/rules.yaml`. No hardcoded thresholds i
 - Work is executed one task at a time (one task per PR unless explicitly approved).
 - Use Plan Mode for any change that touches multiple files or changes behavior.
 - Before editing: confirm which files will be modified.
-- Only modify files explicitly allowed by the current task (see TASKS.md or the user prompt).
+- Only modify files explicitly allowed by the current task (see `docs/project/TASKS.md` or the user prompt).
 - If additional files seem necessary, STOP and ask before changing them.
 - After implementing: run `pytest` and `ruff check .` and report results.
 
@@ -144,6 +144,34 @@ Rules are fully config-driven via `config/rules.yaml`. No hardcoded thresholds i
 - For user-input/data issues: raise clear exceptions (ValueError) with actionable messages.
 - For IO failures (export/logging): log and raise; never pretend success.
 
+## Branching & PR Model (Standard — applies to every iteration)
+
+Every iteration follows this structure. No exceptions.
+
+```
+main  (stable — never touched mid-iteration)
+ └── feature/iteration-N          ← integration branch, one per iteration
+      ├── feature/iN-1-description     ← task branch → PR → feature/iteration-N
+      ├── feature/iN-2-description     ← task branch → PR → feature/iteration-N
+      └── ...
+                                        ↓ all tasks done + review passed
+                                       main  (one final PR per iteration)
+```
+
+**Rules — non-negotiable:**
+1. Every task branch is created FROM `feature/iteration-N`, not from `main`.
+2. A **draft PR is opened immediately after creating the branch** — before writing any code.
+3. Task PRs target `feature/iteration-N`, not `main`.
+4. The draft PR is marked ready for review only after `pytest` and `ruff check .` pass.
+5. `main` is only updated via one final PR from `feature/iteration-N`, after the iteration architecture review passes.
+6. The iteration integration branch (`feature/iteration-N`) is created from `main` before any task work begins.
+
+**Why draft PR first:**
+Opening the PR before writing code ensures the PR always exists before any merge happens.
+This prevents the situation where a branch is merged into the integration branch without a reviewable PR.
+
+---
+
 ## Repo Workflow Conventions
 
 - Avoid unrelated refactors or formatting-only changes unless requested.
@@ -152,5 +180,5 @@ Rules are fully config-driven via `config/rules.yaml`. No hardcoded thresholds i
 
 ## Task Source of Truth
 
-- TASKS.md defines the current iteration tasks and allowed-file boundaries.
+- `docs/project/TASKS.md` defines the current iteration tasks and allowed-file boundaries.
 - CLAUDE.md defines permanent architecture and working rules.

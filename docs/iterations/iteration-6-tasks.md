@@ -1,26 +1,92 @@
 # Iteration 6 — Historical Memory & Trend Awareness
 ## Detailed Task Plan
 
-**Status:** I6-0 complete. I6-1 is next.
-**Baseline:** 217 tests passing, ruff clean, all I5 branches merged.
+**Status:** I6-0 through I6-5 complete. PRs #27 (I6-2), #28 (I6-3), #29 (I6-4) merged into `feature/iteration-6`. PR #30 (I6-5) ready for review. I6-6 is next (Codex — prompt template update).
+**Baseline:** 269 tests passing, ruff clean.
+
+---
+
+## Branching Strategy
+
+Iteration 6 uses a **dedicated integration branch** rather than merging tasks directly to `main`.
+
+```
+main
+ └── feature/iteration-6          ← iteration integration branch
+      ├── feature/i6-1-history-config     (merged ✅)
+      ├── feature/i6-2-history-store      (PR #27 ready ✅)
+      ├── feature/i6-3-pipeline-integration (PR #28 ready ✅)
+      ├── feature/i6-4-trend-engine       (PR #29 ready ✅)
+      ├── feature/i6-5-llm-trend-context
+      └── feature/i6-6-prompt-template
+```
+
+**Rules:**
+- Every task branch is created from `feature/iteration-6` (not from `main`)
+- Every task PR targets `feature/iteration-6` (not `main`)
+- `feature/iteration-6` is only merged into `main` once the full iteration passes the I6-7 architecture review and I6-8 cleanup
+- `main` stays stable and production-ready throughout the entire iteration
 
 ---
 
 ## Execution Order
 
 ```
-I6-0  [Claude]   Docs update                    ✅ DONE
-I6-1  [Codex]    Config — history: section       → unblocks all coding
-I6-2  [Claude]   History store + HistoryReader   → depends on I6-1
-I6-3  [Claude]   Pipeline integration            → depends on I6-2   ┐ can run
-I6-4  [Claude]   Trend engine                    → depends on I6-2   ┘ in parallel
-I6-5  [Claude]   LLM adapter extension           → depends on I6-3 + I6-4
-I6-6  [Codex]    Prompt template update          → depends on I6-5
-I6-7  [You]      Architecture review             → depends on I6-6
-I6-8  [Claude]   Final cleanup pass              → depends on I6-7
+I6-0  [Claude]   Docs update                    ✅ DONE (merged to main)
+I6-1  [Codex]    Config — history: section      ✅ DONE (merged to feature/iteration-6)
+I6-2  [Claude]   History store + HistoryReader  ✅ DONE (PR #27 ready — 18 tests, 235 total)
+I6-3  [Claude]   Pipeline integration           ✅ DONE (PR #28 ready — 7 tests, 242 total)
+I6-4  [Claude]   Trend engine                   ✅ DONE (PR #29 ready — 20 tests, 262 total)
+I6-5  [Claude]   LLM adapter extension          ✅ DONE (PR #30 ready — 7 tests, 269 total)
+I6-6  [Codex]    Prompt template update         → depends on I6-5
+I6-7  [You]      Architecture review            → depends on I6-6
+I6-8  [Claude]   Final cleanup + merge to main  → depends on I6-7
 ```
 
-**One task = one PR. Never combine tasks in a single PR unless explicitly approved.**
+**One task = one PR into `feature/iteration-6`. Never combine tasks. Never PR directly to `main`.**
+
+---
+
+## Per-Task Workflow (follow exactly for every task)
+
+```bash
+# 1. Start from the iteration branch
+git checkout feature/iteration-6
+git pull origin feature/iteration-6
+git status                          # must be clean
+
+# 2. Create and push the task branch
+git checkout -b feature/i6-N-description
+git push -u origin feature/i6-N-description
+
+# 3. Open a DRAFT PR immediately — before writing any code
+gh pr create \
+  --base feature/iteration-6 \
+  --head feature/i6-N-description \
+  --title "I6-N: Task title" \
+  --body "Work in progress. See prompt file for full task spec." \
+  --draft
+
+# 4. Verify baseline before touching anything
+pytest                              # must pass
+ruff check .                        # must be clean
+
+# 5. Implement, then test and lint again
+pytest && ruff check .
+
+# 6. Verify scope
+git diff --name-only feature/iteration-6
+# Only allowed files should appear
+
+# 7. Commit and push
+git push origin feature/i6-N-description
+
+# 8. Mark PR ready for review
+gh pr ready feature/i6-N-description
+```
+
+**Note on I6-1:** I6-1 was merged into `feature/iteration-6` before this workflow was established.
+It is the only task without a task-level PR. All tasks from I6-2 onwards follow the steps above.
 
 ---
 
@@ -107,7 +173,20 @@ config/rules.yaml    ← add history: section only
 
 **Owner:** Claude
 **Branch:** `feature/i6-2-history-store`
+**Status:** ✅ DONE — PR #27 ready for review
 **Depends on:** I6-1 merged
+
+### Actual Deliverables
+- `src/wbsb/history/__init__.py` — empty package marker
+- `src/wbsb/history/store.py` — `RunRecord`, `derive_dataset_key()`, `register_run()` (atomic write), `HistoryReader`
+- `tests/test_history.py` — 18 tests (6 derive_dataset_key, 5 register_run, 7 HistoryReader)
+- Test count after: 235 (up from 217)
+
+### Deviations from Spec
+- None. All 18 tests pass. All acceptance criteria met.
+- Code review found `except OSError: pass` in temp-file cleanup (fixed) and weak n_weeks assertion (strengthened).
+
+
 
 ### Why Claude
 This module establishes the architectural foundation for all of Iteration 6. It touches file I/O, data isolation logic, and the shape of the index that every downstream task depends on. It requires architectural judgment about failure modes, race conditions (single-user, not multi-process, but still), and the contract the rest of the system will build against.
@@ -253,7 +332,19 @@ tests/test_history.py              ← new
 
 **Owner:** Claude
 **Branch:** `feature/i6-3-pipeline-integration`
+**Status:** ✅ DONE — PR #28 ready for review
 **Depends on:** I6-2 merged
+
+### Actual Deliverables
+- `src/wbsb/pipeline.py` — added `derive_dataset_key()`, `week_end = week_start + timedelta(days=6)`, `RunRecord` construction, `register_run()` call after `write_artifacts()`
+- `tests/test_pipeline_history.py` — 7 integration tests (new file; pipeline-level tests kept separate from store unit tests)
+- Test count after: 242 (up from 235)
+
+### Deviations from Spec
+- Test file is `tests/test_pipeline_history.py`, not `tests/test_history.py` — cleaner separation of concerns (store unit tests vs pipeline integration tests)
+- Code review added 2 missing tests: `test_pipeline_register_run_error_propagates` (monkeypatched register_run) and `test_pipeline_second_run_appends_index`; strengthened type assertions on index entry fields
+
+
 
 ### Why Claude
 `pipeline.py` is the orchestrator that touches every stage in order. Adding history registration in the wrong place (e.g., before artifacts are written, or in a try/except that swallows errors) would silently corrupt the history index or break the audit trail. This requires understanding of the pipeline's existing error handling and artifact lifecycle.
@@ -311,7 +402,19 @@ tests/test_history.py              ← extend
 
 **Owner:** Claude
 **Branch:** `feature/i6-4-trend-engine`
+**Status:** ✅ DONE — PR #29 ready for review
 **Depends on:** I6-2 merged (I6-3 can run in parallel)
+
+### Actual Deliverables
+- `src/wbsb/history/trends.py` — `TrendResult`, `compute_trends()`, `_classify()`, `_build_direction_sequence()`, config loading
+- `tests/test_trends.py` — 20 tests covering all 6 labels, flat-step neutrality, baseline formula, edge cases
+- Test count after: 262 (up from 242)
+
+### Deviations from Spec
+- Test file is `tests/test_trends.py` (new), not `tests/test_history.py` — deliberate separation of concerns matching the I6-3 precedent. Approved in `prompt-task-4.md`.
+- `except Exception` broad catch removed after code review — all data edge cases (sparse values, zero-prev, zero-baseline) are handled explicitly. Programming errors propagate as intended.
+
+
 
 ### Why Claude
 This is the most logic-dense module in Iteration 6. The six trend label definitions must be implemented precisely, with careful handling of edge cases (gaps in history, alternating signals, the boundary between `volatile` and `recovering`). It also requires reading config without hardcoding and threading `dataset_key` through correctly.
