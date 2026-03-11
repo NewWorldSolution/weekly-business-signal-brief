@@ -422,13 +422,13 @@ weekly-business-signal-brief/
 │   └── rules.yaml                # All signal thresholds and guardrail values
 ├── examples/datasets/            # 10 synthetic test datasets
 ├── runs/                         # Output directory (one folder per run)
-├── tests/                        # pytest test suite (217 tests)
+├── tests/                        # pytest test suite (271 tests)
 ├── docs/project/project-iterations.md   # Full roadmap (I1–I10)
-├── docs/iterations/iteration-5-summary.md # Iteration 5 detailed summary
+├── docs/iterations/i5/summary.md           # Iteration 5 detailed summary
 └── docs/project/HOW_IT_WORKS.md         # This file
 ```
 
 ---
 
-*System state as of Iteration 5 — March 2026.*
-*217 tests passing. Ruff clean. All thresholds configurable via `config/rules.yaml`.*
+*System state as of Iteration 6 — March 2026.*
+*271 tests passing. Ruff clean. All thresholds configurable via `config/rules.yaml`.*

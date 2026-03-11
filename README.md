@@ -208,7 +208,7 @@ runs/20260309T092734Z_085775/
 
 **MVP** closes when I6, I9, and I7 are complete.
 
-Current state: 217 tests passing · Ruff clean · All thresholds configurable via `config/rules.yaml`
+Current state: 271 tests passing · Ruff clean · All thresholds configurable via `config/rules.yaml`
 
 ---
 
@@ -219,7 +219,7 @@ Current state: 217 tests passing · Ruff clean · All thresholds configurable vi
 | [`docs/project/HOW_IT_WORKS.md`](docs/project/HOW_IT_WORKS.md) | Developers / operators | Full system guide — pipeline, metrics, signals, CLI reference, artifacts |
 | [`docs/project/PROJECT_BRIEF.md`](docs/project/PROJECT_BRIEF.md) | Clients / investors / stakeholders | Business-oriented product brief — problem, value, vision, roadmap |
 | [`docs/project/project-iterations.md`](docs/project/project-iterations.md) | Product / engineering | Full iteration roadmap with task breakdowns and acceptance criteria |
-| [`docs/iterations/iteration-5-summary.md`](docs/iterations/iteration-5-summary.md) | Engineering | Detailed I5 summary — what was built, bugs fixed, model comparison |
+| [`docs/iterations/i5/summary.md`](docs/iterations/i5/summary.md) | Engineering | Detailed I5 summary — what was built, bugs fixed, model comparison |
 | [`CLAUDE.md`](CLAUDE.md) | Contributors | Architecture rules, coding constraints, working conventions |
 
 ---
