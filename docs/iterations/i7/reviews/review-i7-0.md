@@ -68,7 +68,7 @@ CSV/XLSX → Loader → Validator → Metrics → Deltas → Rules Engine → Fi
 | Title | Domain Models, Schemas, and Eval Config |
 | Iteration | Iteration 7 — Evaluation Framework & Operator Feedback Loop |
 | Implemented by | Claude |
-| Reviewed by | Claude (next session) or Codex |
+| Reviewed by | Codex |
 | Iteration branch | `feature/iteration-7` |
 | Feature branch | `feature/i7-0-pre-work` |
 | Expected test count | 271 before → 271 after (no new tests — models only) |
