@@ -30,7 +30,7 @@ Full roadmap with all planned iterations: see `project-iterations.md`.
 | I3 | Business Reporting Layer | ✅ Complete |
 | I4 | LLM Integration | ✅ Complete |
 | I5 | Analytical Reasoning Upgrade | ✅ Complete |
-| **I6** | **Historical Memory & Trend Awareness** | **🔄 In Progress** |
+| **I6** | **Historical Memory & Trend Awareness** | **✅ Complete** |
 | I9 | Deployment & Delivery | 🔲 Planned |
 | I7 | Evaluation Framework & Feedback Loop | 🔲 Planned |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned |
@@ -63,8 +63,8 @@ Full task detail: see `../iterations/iteration-6-tasks.md`.
 | I6-4 | Claude | Deterministic trend engine (6 labels) | ✅ Done — PR #29 merged |
 | I6-5 | Claude | Extend LLM adapter with trend context | ✅ Done — PR #30 merged |
 | I6-6 | Codex | Update prompt template for trend context | ✅ Done — PR #31 merged |
-| I6-7 | You | Architecture review checklist | 🔲 Next — depends on I6-6 |
-| I6-8 | Claude | Final cleanup + merge to main | 🔲 Blocked on I6-7 |
+| I6-7 | You | Architecture review checklist | ✅ Done — passed (no issues) |
+| I6-8 | Claude | Final cleanup + merge to main | ✅ Done — PR #32 |
 
 ---
 
@@ -77,8 +77,9 @@ main
       ├── feature/i6-2-history-store          (PR #27 ready ✅)
       ├── feature/i6-3-pipeline-integration   (PR #28 ready ✅)
       ├── feature/i6-4-trend-engine           (merged ✅)
-      ├── feature/i6-5-llm-trend-context      (PR #30 ready ✅)
-      └── feature/i6-6-prompt-template
+      ├── feature/i6-5-llm-trend-context      (PR #30 merged ✅)
+      ├── feature/i6-6-prompt-template        (PR #31 merged ✅)
+      └── feature/i6-8-final-cleanup          (PR #32 ✅)
 ```
 
 `feature/iteration-6` → `main` via single PR after I6-7 architecture review passes.
@@ -117,14 +118,6 @@ main
 
 ---
 
-## Next: I6-6 — Prompt Template Update (Codex)
-
-Add TREND CONTEXT block to `src/wbsb/render/prompts/user_full_v2.j2`.
-Receives `trend_context_for_prompt` list from `build_prompt_inputs()`.
-Omit block entirely when list is empty.
-
----
-
 ## Iteration 6 — Definition of Done
 
 - [x] `runs/index.json` created/updated after every successful pipeline run — I6-2, I6-3
@@ -134,9 +127,9 @@ Omit block entirely when list is empty.
 - [x] All six trend labels computed correctly — I6-4
 - [x] Zero hardcoded thresholds in `trends.py` — I6-4
 - [x] `direction_sequence` never sent to LLM — I6-5
-- [ ] Trend context in LLM prompt when valid history exists — I6-5 ✅ wired, I6-6 template pending
-- [ ] TREND CONTEXT absent on first run and when all `insufficient_history` — I6-5 ✅ filtered, I6-6 template pending
-- [ ] All 269+ tests passing — ongoing
-- [ ] Ruff clean — ongoing
-- [ ] `runs/index.json` in `.gitignore` — I6-8
-- [ ] `main` branch stable — I6-8
+- [x] Trend context in LLM prompt when valid history exists — I6-5, I6-6
+- [x] TREND CONTEXT absent on first run and when all `insufficient_history` — I6-5, I6-6
+- [x] All 271 tests passing — I6-8
+- [x] Ruff clean — I6-8
+- [x] `runs/index.json` in `.gitignore` — I6-8
+- [x] `main` branch stable — I6-8
