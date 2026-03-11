@@ -31,8 +31,8 @@ Full roadmap with all planned iterations: see `project-iterations.md`.
 | I4 | LLM Integration | ✅ Complete |
 | I5 | Analytical Reasoning Upgrade | ✅ Complete |
 | **I6** | **Historical Memory & Trend Awareness** | **✅ Complete** |
+| **I7** | **Evaluation Framework & Feedback Loop** | **🔲 Next** |
 | I9 | Deployment & Delivery | 🔲 Planned |
-| I7 | Evaluation Framework & Feedback Loop | 🔲 Planned |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned |
 | I10 | Multi-File Data Consolidation | 🔲 Planned |
 

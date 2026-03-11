@@ -24,6 +24,7 @@ This folder contains all project documentation organized by purpose.
   - [`iterations/i6/prompts/prompt-task-6.md`](iterations/i6/prompts/prompt-task-6.md)
   - [`iterations/i6/reviews/review-i6-5.md`](iterations/i6/reviews/review-i6-5.md)
   - [`iterations/i6/reviews/review-i6-6.md`](iterations/i6/reviews/review-i6-6.md)
+  - [`iterations/i7/tasks.md`](iterations/i7/tasks.md)
 - `prompts/` — shared templates
   - [`prompts/templates/review-prompt-template.md`](prompts/templates/review-prompt-template.md)
   - [`prompts/templates/task-prompt-template.md`](prompts/templates/task-prompt-template.md)
