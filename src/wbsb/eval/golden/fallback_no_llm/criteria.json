@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0",
+  "description": "LLM fallback path — no LLM output, eval must be skipped cleanly",
+  "expect_eval_scores": false,
+  "min_grounding": null,
+  "min_signal_coverage": null,
+  "max_hallucination_risk": null,
+  "expected_skipped_reason": "llm_fallback"
+}

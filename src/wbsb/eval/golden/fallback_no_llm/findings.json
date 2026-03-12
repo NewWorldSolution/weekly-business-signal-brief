@@ -1,0 +1,30 @@
+{
+  "run": {
+    "run_id": "golden-fallback-no-llm-001",
+    "generated_at": "2026-03-09T12:00:00+00:00",
+    "input_file": "synthetic_fallback.csv",
+    "input_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+    "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "periods": {
+    "current_week_start": "2026-03-09",
+    "current_week_end": "2026-03-15",
+    "previous_week_start": "2026-03-02",
+    "previous_week_end": "2026-03-08"
+  },
+  "metrics": [
+    {
+      "id": "net_revenue",
+      "name": "Net Revenue",
+      "unit": "currency",
+      "current": 9000.0,
+      "previous": 9200.0,
+      "delta_abs": -200.0,
+      "delta_pct": -2.2,
+      "format_hint": "currency"
+    }
+  ],
+  "signals": [],
+  "dominant_cluster_exists": false,
+  "audit": []
+}

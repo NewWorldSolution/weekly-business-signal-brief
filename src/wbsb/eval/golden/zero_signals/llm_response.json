@@ -1,0 +1,30 @@
+{
+  "llm_result": {
+    "executive_summary": "",
+    "situation": "Quiet week with no signals. Revenue held steady at 11,000, up slightly from 10,800.",
+    "key_story": null,
+    "group_narratives": {},
+    "signal_narratives": {"narratives": {}},
+    "watch_signals": null,
+    "model": "claude-haiku-4-5-20251001",
+    "prompt_version": "full_v2",
+    "fallback": false,
+    "fallback_reason": "",
+    "token_usage": {}
+  },
+  "model": "claude-haiku-4-5-20251001",
+  "provider": "anthropic",
+  "eval_scores": {
+    "grounding": null,
+    "grounding_reason": "no_numbers_cited",
+    "flagged_numbers": [],
+    "signal_coverage": 1.0,
+    "group_coverage": 1.0,
+    "hallucination_risk": 0,
+    "hallucination_violations": [],
+    "model": "claude-haiku-4-5-20251001",
+    "evaluated_at": "2026-03-09T12:05:00+00:00",
+    "schema_version": "1.0"
+  },
+  "eval_skipped_reason": null
+}

@@ -1,0 +1,38 @@
+{
+  "llm_result": {
+    "executive_summary": "",
+    "situation": "Revenue declined sharply this week with net revenue at 7,200, down 24% from 9,500.",
+    "key_story": "All three revenue signals fired simultaneously: revenue down 24%, new clients down 43%, and gross margin compressed from 52% to 38%.",
+    "group_narratives": {
+      "revenue": "The revenue cluster shows a broad-based deterioration across volume, acquisition, and margin."
+    },
+    "signal_narratives": {
+      "narratives": {
+        "rev_decline_major": "Net revenue fell to 7,200 from 9,500, a 24% decline.",
+        "new_clients_decline": "New paid clients dropped from 14 to 8, down 43%.",
+        "margin_compression": "Gross margin fell from 52% to 38%, a 27% compression."
+      }
+    },
+    "watch_signals": null,
+    "model": "claude-haiku-4-5-20251001",
+    "prompt_version": "full_v2",
+    "fallback": false,
+    "fallback_reason": "",
+    "token_usage": {}
+  },
+  "model": "claude-haiku-4-5-20251001",
+  "provider": "anthropic",
+  "eval_scores": {
+    "grounding": 0.88,
+    "grounding_reason": null,
+    "flagged_numbers": [],
+    "signal_coverage": 1.0,
+    "group_coverage": 1.0,
+    "hallucination_risk": 0,
+    "hallucination_violations": [],
+    "model": "claude-haiku-4-5-20251001",
+    "evaluated_at": "2026-03-09T12:05:00+00:00",
+    "schema_version": "1.0"
+  },
+  "eval_skipped_reason": null
+}
