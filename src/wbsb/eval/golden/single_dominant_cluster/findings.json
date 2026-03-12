@@ -1,0 +1,84 @@
+{
+  "run": {
+    "run_id": "golden-dominant-cluster-001",
+    "generated_at": "2026-03-09T12:00:00+00:00",
+    "input_file": "synthetic_dominant_cluster.csv",
+    "input_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+    "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "periods": {
+    "current_week_start": "2026-03-09",
+    "current_week_end": "2026-03-15",
+    "previous_week_start": "2026-03-02",
+    "previous_week_end": "2026-03-08"
+  },
+  "metrics": [
+    {
+      "id": "net_revenue",
+      "name": "Net Revenue",
+      "unit": "currency",
+      "current": 7200.0,
+      "previous": 9500.0,
+      "delta_abs": -2300.0,
+      "delta_pct": -24.2,
+      "format_hint": "currency"
+    },
+    {
+      "id": "new_clients_paid",
+      "name": "New Paid Clients",
+      "unit": "count",
+      "current": 8.0,
+      "previous": 14.0,
+      "delta_abs": -6.0,
+      "delta_pct": -42.9,
+      "format_hint": "integer"
+    },
+    {
+      "id": "gross_margin",
+      "name": "Gross Margin",
+      "unit": "ratio",
+      "current": 0.38,
+      "previous": 0.52,
+      "delta_abs": -0.14,
+      "delta_pct": -26.9,
+      "format_hint": "percent"
+    }
+  ],
+  "signals": [
+    {
+      "rule_id": "rev_decline_major",
+      "severity": "WARN",
+      "metric_id": "net_revenue",
+      "label": "Major Revenue Decline",
+      "category": "revenue",
+      "priority": 10,
+      "condition": "delta_pct_lte",
+      "explanation": "Revenue dropped 24.2% week-over-week",
+      "evidence": {"delta_pct": -24.2, "current": 7200.0, "previous": 9500.0}
+    },
+    {
+      "rule_id": "new_clients_decline",
+      "severity": "WARN",
+      "metric_id": "new_clients_paid",
+      "label": "New Client Decline",
+      "category": "revenue",
+      "priority": 9,
+      "condition": "delta_pct_lte",
+      "explanation": "New paid clients dropped 42.9%",
+      "evidence": {"delta_pct": -42.9, "current": 8.0, "previous": 14.0}
+    },
+    {
+      "rule_id": "margin_compression",
+      "severity": "WARN",
+      "metric_id": "gross_margin",
+      "label": "Margin Compression",
+      "category": "revenue",
+      "priority": 8,
+      "condition": "delta_pct_lte",
+      "explanation": "Gross margin compressed 26.9%",
+      "evidence": {"delta_pct": -26.9, "current": 0.38, "previous": 0.52}
+    }
+  ],
+  "dominant_cluster_exists": true,
+  "audit": []
+}

@@ -1,0 +1,38 @@
+{
+  "llm_result": {
+    "executive_summary": "",
+    "situation": "Two independent signals this week: revenue at 10,200 declined 11% and show rate dropped from 78% to 61%.",
+    "key_story": null,
+    "group_narratives": {
+      "revenue": "Revenue declined 11% to 10,200 with no dominant cluster pattern.",
+      "operations": "Show rate fell to 61% from 78%, a 22% decline."
+    },
+    "signal_narratives": {
+      "narratives": {
+        "rev_decline_minor": "Net revenue fell to 10,200 from 11,500, an 11% decline.",
+        "show_rate_decline": "Show rate dropped to 61% from 78%, down 22%."
+      }
+    },
+    "watch_signals": null,
+    "model": "claude-haiku-4-5-20251001",
+    "prompt_version": "full_v2",
+    "fallback": false,
+    "fallback_reason": "",
+    "token_usage": {}
+  },
+  "model": "claude-haiku-4-5-20251001",
+  "provider": "anthropic",
+  "eval_scores": {
+    "grounding": 0.86,
+    "grounding_reason": null,
+    "flagged_numbers": [],
+    "signal_coverage": 1.0,
+    "group_coverage": 1.0,
+    "hallucination_risk": 0,
+    "hallucination_violations": [],
+    "model": "claude-haiku-4-5-20251001",
+    "evaluated_at": "2026-03-09T12:05:00+00:00",
+    "schema_version": "1.0"
+  },
+  "eval_skipped_reason": null
+}

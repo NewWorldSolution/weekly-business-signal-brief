@@ -1,0 +1,40 @@
+{
+  "run": {
+    "run_id": "golden-clean-week-001",
+    "generated_at": "2026-03-09T12:00:00+00:00",
+    "input_file": "synthetic_clean_week.csv",
+    "input_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "periods": {
+    "current_week_start": "2026-03-09",
+    "current_week_end": "2026-03-15",
+    "previous_week_start": "2026-03-02",
+    "previous_week_end": "2026-03-08"
+  },
+  "metrics": [
+    {
+      "id": "net_revenue",
+      "name": "Net Revenue",
+      "unit": "currency",
+      "current": 12500.0,
+      "previous": 11800.0,
+      "delta_abs": 700.0,
+      "delta_pct": 5.93,
+      "format_hint": "currency"
+    },
+    {
+      "id": "new_clients_paid",
+      "name": "New Paid Clients",
+      "unit": "count",
+      "current": 18.0,
+      "previous": 16.0,
+      "delta_abs": 2.0,
+      "delta_pct": 12.5,
+      "format_hint": "integer"
+    }
+  ],
+  "signals": [],
+  "dominant_cluster_exists": false,
+  "audit": []
+}

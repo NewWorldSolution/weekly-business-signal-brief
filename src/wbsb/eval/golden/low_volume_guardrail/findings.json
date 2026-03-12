@@ -1,0 +1,59 @@
+{
+  "run": {
+    "run_id": "golden-low-volume-001",
+    "generated_at": "2026-03-09T12:00:00+00:00",
+    "input_file": "synthetic_low_volume.csv",
+    "input_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "periods": {
+    "current_week_start": "2026-03-09",
+    "current_week_end": "2026-03-15",
+    "previous_week_start": "2026-03-02",
+    "previous_week_end": "2026-03-08"
+  },
+  "metrics": [
+    {
+      "id": "net_revenue",
+      "name": "Net Revenue",
+      "unit": "currency",
+      "current": 1800.0,
+      "previous": 2100.0,
+      "delta_abs": -300.0,
+      "delta_pct": -14.3,
+      "format_hint": "currency"
+    },
+    {
+      "id": "leads_paid",
+      "name": "Paid Leads",
+      "unit": "count",
+      "current": 3.0,
+      "previous": 4.0,
+      "delta_abs": -1.0,
+      "delta_pct": -25.0,
+      "format_hint": "integer"
+    }
+  ],
+  "signals": [
+    {
+      "rule_id": "rev_decline_minor",
+      "severity": "WARN",
+      "metric_id": "net_revenue",
+      "label": "Revenue Decline",
+      "category": "revenue",
+      "priority": 6,
+      "condition": "delta_pct_lte",
+      "explanation": "Revenue dropped 14.3% but volume is low",
+      "evidence": {"delta_pct": -14.3, "current": 1800.0, "previous": 2100.0}
+    }
+  ],
+  "dominant_cluster_exists": false,
+  "audit": [
+    {
+      "event": "guardrail_skipped",
+      "rule_id": "cac_spike",
+      "reason": "requires_prev_leads_paid_gte: previous paid leads 4 below threshold 10",
+      "severity": "INFO"
+    }
+  ]
+}

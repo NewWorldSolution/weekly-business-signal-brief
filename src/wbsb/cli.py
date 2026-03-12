@@ -66,6 +66,31 @@ def run(
     raise typer.Exit(exit_code)
 
 
+@app.command("eval")
+def eval_cmd(
+    case: str = typer.Option(None, "--case", help="Run a single named case."),
+) -> None:
+    """Run evaluation against golden dataset cases."""
+    from wbsb.eval.runner import load_case, run_all_cases, run_case
+
+    if case:
+        results = [run_case(load_case(case))]
+    else:
+        results = run_all_cases()
+
+    any_failed = False
+    for result in results:
+        status = "PASS" if result["passed"] else "FAIL"
+        typer.echo(f"[{status}] {result['name']}")
+        for failure in result["failures"]:
+            typer.echo(f"  - {failure}")
+        if not result["passed"]:
+            any_failed = True
+
+    if any_failed:
+        raise typer.Exit(code=1)
+
+
 @app.command("version")
 def version() -> None:
     """Print the WBSB version."""

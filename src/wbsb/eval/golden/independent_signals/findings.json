@@ -1,0 +1,63 @@
+{
+  "run": {
+    "run_id": "golden-independent-signals-001",
+    "generated_at": "2026-03-09T12:00:00+00:00",
+    "input_file": "synthetic_independent_signals.csv",
+    "input_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "periods": {
+    "current_week_start": "2026-03-09",
+    "current_week_end": "2026-03-15",
+    "previous_week_start": "2026-03-02",
+    "previous_week_end": "2026-03-08"
+  },
+  "metrics": [
+    {
+      "id": "net_revenue",
+      "name": "Net Revenue",
+      "unit": "currency",
+      "current": 10200.0,
+      "previous": 11500.0,
+      "delta_abs": -1300.0,
+      "delta_pct": -11.3,
+      "format_hint": "currency"
+    },
+    {
+      "id": "show_rate",
+      "name": "Show Rate",
+      "unit": "ratio",
+      "current": 0.61,
+      "previous": 0.78,
+      "delta_abs": -0.17,
+      "delta_pct": -21.8,
+      "format_hint": "percent"
+    }
+  ],
+  "signals": [
+    {
+      "rule_id": "rev_decline_minor",
+      "severity": "WARN",
+      "metric_id": "net_revenue",
+      "label": "Revenue Decline",
+      "category": "revenue",
+      "priority": 8,
+      "condition": "delta_pct_lte",
+      "explanation": "Revenue dropped 11.3% week-over-week",
+      "evidence": {"delta_pct": -11.3, "current": 10200.0, "previous": 11500.0}
+    },
+    {
+      "rule_id": "show_rate_decline",
+      "severity": "WARN",
+      "metric_id": "show_rate",
+      "label": "Show Rate Decline",
+      "category": "operations",
+      "priority": 7,
+      "condition": "delta_pct_lte",
+      "explanation": "Show rate fell from 78% to 61%",
+      "evidence": {"delta_pct": -21.8, "current": 0.61, "previous": 0.78}
+    }
+  ],
+  "dominant_cluster_exists": false,
+  "audit": []
+}
