@@ -12,7 +12,9 @@ from wbsb.domain.models import (
     RunMeta,
     Signal,
 )
+from wbsb.eval.models import EvalScores
 from wbsb.eval.scorer import (
+    build_eval_scores,
     score_grounding,
     score_hallucination,
     score_signal_coverage,
@@ -376,3 +378,22 @@ def test_hallucination_multiple_violations():
         "extra_signal_narrative",
         "missing_signal_narrative",
     }
+
+
+def test_build_eval_scores_returns_eval_scores_model():
+    findings = _findings(
+        [_signal("A1", "revenue")],
+        [MetricResult(id="net_revenue", name="Net Revenue", unit="currency", current=8000.0)],
+    )
+    llm_result = LLMResult(
+        executive_summary="Revenue is 8000.",
+        model="claude-haiku-4-5-20251001",
+        signal_narratives=LLMSignalNarratives(narratives={"A1": "Revenue dropped."}),
+    )
+
+    result = build_eval_scores(findings, llm_result, _cfg())
+
+    assert isinstance(result, EvalScores)
+    assert result.model == "claude-haiku-4-5-20251001"
+    assert result.evaluated_at != ""
+    assert result.schema_version == "1.0"

@@ -1174,3 +1174,83 @@ class TestTrendContextPromptInputs:
         }
         inputs = build_prompt_inputs(self._ctx(), trend_context=trend_context)
         assert inputs["trend_context_for_prompt"] == []
+
+
+# ---------------------------------------------------------------------------
+# I7-5: Eval scorer wiring tests
+# ---------------------------------------------------------------------------
+
+
+def _make_full_situation_response(
+    situation: str = "Revenue is 8000 this week.",
+    rule_ids: list[str] | None = None,
+) -> str:
+    import json
+
+    rule_ids = rule_ids or ["A1"]
+    return json.dumps({
+        "executive_summary": "",
+        "situation": situation,
+        "signal_narratives": {"narratives": {rid: "narrative text" for rid in rule_ids}},
+    })
+
+
+def test_eval_scores_written_to_artifact_on_success(monkeypatch):
+    """generate() returns AdapterLLMResult with eval_scores_data populated on success."""
+    ctx = _make_ctx(signals=[_make_signal(rule_id="A1")], metrics=[_make_metric()])
+    client = MockSuccessClient(_make_full_situation_response())
+
+    result = generate(ctx, mode="full", provider="anthropic", client=client)
+
+    assert result is not None
+    assert result.eval_scores_data is not None
+    scores = result.eval_scores_data["eval_scores"]
+    assert scores is not None
+    assert "grounding" in scores
+    assert "signal_coverage" in scores
+    assert "group_coverage" in scores
+    assert "hallucination_risk" in scores
+    assert "hallucination_violations" in scores
+    assert "model" in scores
+    assert "evaluated_at" in scores
+    assert result.eval_scores_data["eval_skipped_reason"] is None
+
+
+def test_eval_scores_null_on_scorer_error(monkeypatch):
+    """generate() records scorer_error when build_eval_scores raises; pipeline continues."""
+    from wbsb.eval.models import EvalScores
+
+    def _fail(*_args, **_kwargs) -> EvalScores:
+        raise RuntimeError("simulated scorer failure")
+
+    monkeypatch.setattr("wbsb.render.llm_adapter.build_eval_scores", _fail)
+
+    ctx = _make_ctx(signals=[_make_signal(rule_id="A1")], metrics=[_make_metric()])
+    client = MockSuccessClient(_make_full_situation_response())
+
+    result = generate(ctx, mode="full", provider="anthropic", client=client)
+
+    assert result is not None  # pipeline did not crash
+    assert result.eval_scores_data is not None
+    assert result.eval_scores_data["eval_scores"] is None
+    assert result.eval_scores_data["eval_skipped_reason"] == "scorer_error"
+    assert "eval_error" in result.eval_scores_data
+
+
+def test_eval_scores_null_on_llm_fallback(monkeypatch):
+    """build_eval_scores is not called when LLM generation fails (returns None)."""
+    calls: list[str] = []
+
+    def _track(*_args, **_kwargs):
+        calls.append("called")
+        raise AssertionError("build_eval_scores must not be called on LLM fallback")
+
+    monkeypatch.setattr("wbsb.render.llm_adapter.build_eval_scores", _track)
+
+    ctx = _make_ctx(signals=[_make_signal()], metrics=[_make_metric()])
+    client = MockInvalidJSONClient()  # causes validate_response to return None
+
+    result = generate(ctx, mode="full", provider="anthropic", client=client)
+
+    assert result is None  # LLM fallback — no AdapterLLMResult
+    assert calls == []  # scorer was never invoked
