@@ -1,4 +1,4 @@
-"""Tests for wbsb.eval.scorer signal coverage."""
+"""Tests for wbsb.eval.scorer."""
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
@@ -12,7 +12,11 @@ from wbsb.domain.models import (
     RunMeta,
     Signal,
 )
-from wbsb.eval.scorer import score_hallucination, score_signal_coverage
+from wbsb.eval.scorer import (
+    score_grounding,
+    score_hallucination,
+    score_signal_coverage,
+)
 
 
 def _findings(
@@ -22,7 +26,7 @@ def _findings(
 ) -> Findings:
     return Findings(
         run=RunMeta(
-            run_id="run-i7-3",
+            run_id="run-i7",
             generated_at=datetime(2026, 3, 12, 12, 0, tzinfo=UTC),
             input_file="input.csv",
             input_sha256="a" * 64,
@@ -65,6 +69,108 @@ def _llm(
         model="claude-haiku-4-5-20251001",
         group_narratives=group_narratives,
     )
+
+
+def _cfg() -> dict:
+    return {
+        "grounding_tolerance_abs": 0.01,
+        "grounding_tolerance_rel": 0.01,
+        "grounding_pct_normalization": True,
+    }
+
+
+def test_grounding_no_numbers_cited():
+    findings = _findings([], [MetricResult(id="m1", name="M1", unit="u", current=100.0)])
+    llm = LLMResult(
+        situation="Revenue improved significantly this week.",
+        key_story=None,
+        group_narratives={},
+        signal_narratives=LLMSignalNarratives(narratives={}),
+        watch_signals=[],
+        model="claude-haiku-4-5-20251001",
+    )
+
+    result = score_grounding(findings, llm, _cfg())
+
+    assert result == {
+        "grounding": None,
+        "grounding_reason": "no_numbers_cited",
+        "flagged_numbers": [],
+    }
+
+
+def test_grounding_all_grounded():
+    findings = _findings(
+        [],
+        [
+            MetricResult(id="m1", name="M1", unit="u", current=1503.0),
+            MetricResult(id="m2", name="M2", unit="u", current=20.0),
+        ],
+    )
+    llm = LLMResult(
+        situation="Revenue is 1,503 and conversion is 20.",
+        model="claude-haiku-4-5-20251001",
+        signal_narratives=LLMSignalNarratives(narratives={}),
+    )
+
+    result = score_grounding(findings, llm, _cfg())
+
+    assert result["grounding"] == 1.0
+    assert result["grounding_reason"] is None
+    assert result["flagged_numbers"] == []
+
+
+def test_grounding_one_flagged():
+    findings = _findings(
+        [],
+        [
+            MetricResult(id="m1", name="M1", unit="u", current=100.0),
+            MetricResult(id="m2", name="M2", unit="u", current=200.0),
+        ],
+    )
+    llm = LLMResult(
+        situation="Current values are 100, 200, and 999.",
+        model="claude-haiku-4-5-20251001",
+        signal_narratives=LLMSignalNarratives(narratives={}),
+    )
+
+    result = score_grounding(findings, llm, _cfg())
+
+    assert result["grounding"] == 2 / 3
+    assert result["grounding_reason"] is None
+    assert result["flagged_numbers"] == ["999"]
+
+
+def test_grounding_pct_normalization():
+    findings = _findings([], [MetricResult(id="m1", name="M1", unit="u", current=0.40)])
+    llm = LLMResult(
+        situation="Gross margin is 40% this week.",
+        model="claude-haiku-4-5-20251001",
+        signal_narratives=LLMSignalNarratives(narratives={}),
+    )
+
+    result = score_grounding(findings, llm, _cfg())
+
+    assert result["grounding"] == 1.0
+    assert result["flagged_numbers"] == []
+
+
+def test_grounding_empty_llm_sections():
+    findings = _findings([], [MetricResult(id="m1", name="M1", unit="u", current=100.0)])
+    llm = LLMResult(
+        situation=None,
+        key_story=None,
+        group_narratives={},
+        signal_narratives=LLMSignalNarratives(narratives={}),
+        watch_signals=[],
+        model="claude-haiku-4-5-20251001",
+    )
+
+    result = score_grounding(findings, llm, _cfg())
+
+    assert result["grounding"] is None
+    assert result["grounding_reason"] == "no_numbers_cited"
+    assert result["flagged_numbers"] == []
 
 
 def test_coverage_all_signals_covered():

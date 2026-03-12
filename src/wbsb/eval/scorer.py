@@ -2,6 +2,70 @@
 from __future__ import annotations
 
 from wbsb.domain.models import Findings, LLMResult
+from wbsb.eval.extractor import (
+    build_evidence_allowlist,
+    candidate_values,
+    extract_numbers_from_text,
+    is_grounded,
+)
+
+
+def score_grounding(findings: Findings, llm_result: LLMResult, cfg: dict) -> dict:
+    """
+    Score how well LLM-cited numbers are grounded in findings evidence.
+
+    Returns:
+        {
+            "grounding": float | None,
+            "grounding_reason": str | None,
+            "flagged_numbers": list[str],
+        }
+    """
+    parts: list[str] = []
+    if llm_result.situation is not None:
+        parts.append(llm_result.situation)
+    if llm_result.key_story is not None:
+        parts.append(llm_result.key_story)
+    parts.extend((llm_result.group_narratives or {}).values())
+
+    signal_narratives_raw = llm_result.signal_narratives or {}
+    if hasattr(signal_narratives_raw, "narratives"):
+        signal_narratives = signal_narratives_raw.narratives or {}
+    else:
+        signal_narratives = signal_narratives_raw
+    parts.extend(signal_narratives.values())
+
+    for entry in llm_result.watch_signals or []:
+        observation = entry.get("observation")
+        if observation is not None:
+            parts.append(observation)
+
+    combined_text = "\n".join(parts)
+    tokens = extract_numbers_from_text(combined_text)
+
+    if len(tokens) == 0:
+        return {
+            "grounding": None,
+            "grounding_reason": "no_numbers_cited",
+            "flagged_numbers": [],
+        }
+
+    allowlist = build_evidence_allowlist(findings)
+    pct_normalization = cfg["grounding_pct_normalization"]
+
+    flagged_numbers: list[str] = []
+    for raw_token in tokens:
+        candidates = candidate_values(raw_token, pct_normalization)
+        grounded = any(is_grounded(candidate, allowlist, cfg) for candidate in candidates)
+        if not grounded:
+            flagged_numbers.append(raw_token)
+
+    grounding = (len(tokens) - len(flagged_numbers)) / len(tokens)
+    return {
+        "grounding": grounding,
+        "grounding_reason": None,
+        "flagged_numbers": flagged_numbers,
+    }
 
 
 def score_signal_coverage(findings: Findings, llm_result: LLMResult) -> dict:
