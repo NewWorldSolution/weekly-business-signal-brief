@@ -31,7 +31,7 @@ Full roadmap with all planned iterations: see `project-iterations.md`.
 | I4 | LLM Integration | ✅ Complete |
 | I5 | Analytical Reasoning Upgrade | ✅ Complete |
 | **I6** | **Historical Memory & Trend Awareness** | **✅ Complete** |
-| **I7** | **Evaluation Framework & Feedback Loop** | **🔲 Next** |
+| **I7** | **Evaluation Framework & Feedback Loop** | **✅ Complete** |
 | I9 | Deployment & Delivery | 🔲 Planned |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned |
 | I10 | Multi-File Data Consolidation | 🔲 Planned |
@@ -133,3 +133,61 @@ main
 - [x] Ruff clean — I6-8
 - [x] `runs/index.json` in `.gitignore` — I6-8
 - [x] `main` branch stable — I6-8
+
+---
+
+# Iteration 7 — Evaluation Framework & Operator Feedback Loop
+
+## Theme
+Add a quality control layer around LLM output and a lightweight operator feedback loop. Every LLM run is automatically scored for grounding, signal coverage, and hallucination risk. Operators can label report sections; feedback is stored and queryable via CLI.
+
+Full task detail: see `../iterations/i7/tasks.md`.
+
+---
+
+## Task Overview
+
+| Task | Owner | Description | Status |
+|------|-------|-------------|--------|
+| I7-0 | Claude | Domain models, JSON schemas, eval config | ✅ Done — PR #34 merged |
+| I7-1 | Codex | Numeric extraction utility | ✅ Done — PR #35 merged |
+| I7-2 | Codex | Grounding scorer | ✅ Done — PR #39 merged |
+| I7-3 | Codex | Signal coverage scorer | ✅ Done — PR #37 merged |
+| I7-4 | Codex | Hallucination detector | ✅ Done — PR #38 merged |
+| I7-5 | Claude | build_eval_scores() + pipeline integration | ✅ Done — PR #40 merged |
+| I7-6 | Claude | Golden dataset runner + wbsb eval CLI | ✅ Done — PR #41 merged |
+| I7-7 | Claude | Feedback storage + wbsb feedback CLI | ✅ Done — PR #36 merged |
+| I7-8 | You | Architecture review | ✅ Done — PASS (all 16 checks) |
+| I7-9 | Claude | Final cleanup + merge to main | ✅ Done |
+
+---
+
+## Iteration 7 — Definition of Done
+
+**Evaluation Engine**
+- [x] `eval_scores` written to `llm_response.json` on every successful LLM run
+- [x] `eval_skipped_reason` set correctly on LLM fallback and scorer error
+- [x] Grounding score computable (or null with reason when no numbers cited)
+- [x] Signal coverage counts both WARN and INFO signals
+- [x] Hallucination violations classified by type and severity
+- [x] No hardcoded tolerance values — all read from `config/rules.yaml`
+- [x] Scorer never breaks report generation
+
+**Golden Dataset**
+- [x] At least 6 cases present in `src/wbsb/eval/golden/`
+- [x] `wbsb eval` runs all cases and exits 0 when all pass
+- [x] `fallback_no_llm` case always present and always passing
+- [x] Governance rules documented in `eval/golden/README.md`
+
+**Feedback System**
+- [x] `save_feedback()` validates run_id, section, label — raises ValueError on violation
+- [x] Comment truncated to 1000 chars silently
+- [x] `wbsb feedback list/summary/export` commands operational
+- [x] `feedback/` directory gitignored, `.gitkeep` committed
+- [x] No webhook server built in I7
+
+**Quality**
+- [x] 324 tests passing (271 baseline + 53 from I7)
+- [x] Ruff clean
+- [x] `domain/models.py` unchanged
+- [x] `main` branch stable
