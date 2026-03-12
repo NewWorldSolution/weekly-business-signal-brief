@@ -31,14 +31,17 @@ def score_signal_coverage(findings: Findings, llm_result: LLMResult) -> dict:
         )
         signal_coverage = signals_with_narrative / total_signals
 
-    payload_categories = {signal.category.lower().replace(" ", "_") for signal in findings.signals}
+    payload_categories = {
+        signal.category.lower().replace(" ", "_") for signal in findings.signals
+    }
 
     group_narratives = llm_result.group_narratives or {}
 
     if not payload_categories:
         group_coverage = 1.0
     else:
-        covered_categories = sum(1 for cat in payload_categories if cat in group_narratives)
+        normalized_group_keys = {k.lower().replace(" ", "_") for k in group_narratives}
+        covered_categories = sum(1 for cat in payload_categories if cat in normalized_group_keys)
         group_coverage = covered_categories / len(payload_categories)
 
     return {

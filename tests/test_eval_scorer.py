@@ -96,7 +96,7 @@ def test_coverage_no_signals():
 
 def test_group_coverage_all_categories():
     findings = _findings([_signal("A1", "Financial Health"), _signal("B1", "revenue")])
-    llm_result = _llm({}, {"financial_health": "ok", "revenue": "ok"})
+    llm_result = _llm({}, {"Financial Health": "ok", "revenue": "ok"})
 
     scores = score_signal_coverage(findings, llm_result)
 
@@ -105,7 +105,7 @@ def test_group_coverage_all_categories():
 
 def test_group_coverage_partial():
     findings = _findings([_signal("A1", "Financial Health"), _signal("B1", "revenue")])
-    llm_result = _llm({}, {"financial_health": "ok"})
+    llm_result = _llm({}, {"Financial Health": "ok"})
 
     scores = score_signal_coverage(findings, llm_result)
 
