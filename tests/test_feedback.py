@@ -115,6 +115,18 @@ def test_summarize_feedback_counts(tmp_path, monkeypatch):
     }
 
 
+def test_save_feedback_autogenerates_feedback_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(feedback_store, "FEEDBACK_DIR", tmp_path)
+    entry = _entry(feedback_id="")
+
+    path = feedback_store.save_feedback(entry)
+
+    loaded = FeedbackEntry.model_validate_json(path.read_text())
+    assert loaded.feedback_id != ""
+    assert len(loaded.feedback_id) == 32  # uuid4().hex is 32 hex chars
+    assert path == tmp_path / f"{loaded.feedback_id}.json"
+
+
 def test_export_feedback_by_run_id(tmp_path, monkeypatch):
     monkeypatch.setattr(feedback_store, "FEEDBACK_DIR", tmp_path)
 
