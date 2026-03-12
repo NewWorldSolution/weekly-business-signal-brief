@@ -491,8 +491,10 @@ class TestPipelineSummaryMode:
             )
         assert exit_code == 0
 
-    def test_summary_mode_fallback_no_llm_response_artifact(self, tmp_path):
-        """When LLM fails, llm_response.json should not be written."""
+    def test_summary_mode_fallback_writes_eval_metadata_artifact(self, tmp_path):
+        """When LLM fails, llm_response.json is written with eval fallback metadata."""
+        import json
+
         from wbsb.pipeline import execute
 
         with patch("wbsb.render.llm_adapter.generate", return_value=None):
@@ -505,7 +507,13 @@ class TestPipelineSummaryMode:
                 target_week=None,
             )
         run_dir = next(p for p in tmp_path.iterdir() if p.is_dir())
-        assert not (run_dir / "llm_response.json").exists()
+        llm_response_path = run_dir / "llm_response.json"
+        assert llm_response_path.exists(), (
+            "llm_response.json must be written with eval fallback metadata"
+        )
+        payload = json.loads(llm_response_path.read_text())
+        assert payload["eval_scores"] is None
+        assert payload["eval_skipped_reason"] == "llm_fallback"
 
 
 # ---------------------------------------------------------------------------

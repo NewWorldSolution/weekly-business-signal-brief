@@ -1,0 +1,9 @@
+{
+  "schema_version": "1.0",
+  "description": "Low-volume week — guardrail fired, one signal, conservative thresholds",
+  "expect_eval_scores": true,
+  "min_grounding": 0.70,
+  "min_signal_coverage": 0.80,
+  "max_hallucination_risk": 2,
+  "expected_skipped_reason": null
+}

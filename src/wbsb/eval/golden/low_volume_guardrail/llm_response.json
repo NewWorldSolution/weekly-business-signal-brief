@@ -1,0 +1,36 @@
+{
+  "llm_result": {
+    "executive_summary": "",
+    "situation": "Low-volume week with revenue at 1,800, down 14% from 2,100. Guardrail skipped the CAC spike rule due to insufficient paid lead history.",
+    "key_story": null,
+    "group_narratives": {
+      "revenue": "Revenue declined 14% to 1,800 in a low-volume week."
+    },
+    "signal_narratives": {
+      "narratives": {
+        "rev_decline_minor": "Net revenue fell to 1,800 from 2,100, a 14% decline in a low-volume week."
+      }
+    },
+    "watch_signals": null,
+    "model": "claude-haiku-4-5-20251001",
+    "prompt_version": "full_v2",
+    "fallback": false,
+    "fallback_reason": "",
+    "token_usage": {}
+  },
+  "model": "claude-haiku-4-5-20251001",
+  "provider": "anthropic",
+  "eval_scores": {
+    "grounding": 0.90,
+    "grounding_reason": null,
+    "flagged_numbers": [],
+    "signal_coverage": 1.0,
+    "group_coverage": 1.0,
+    "hallucination_risk": 0,
+    "hallucination_violations": [],
+    "model": "claude-haiku-4-5-20251001",
+    "evaluated_at": "2026-03-09T12:05:00+00:00",
+    "schema_version": "1.0"
+  },
+  "eval_skipped_reason": null
+}

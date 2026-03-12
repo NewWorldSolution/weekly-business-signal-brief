@@ -42,6 +42,7 @@ def write_artifacts(
     rendered_system_prompt: str = "",
     rendered_user_prompt: str = "",
     raw_response: str = "",
+    eval_scores_data: dict | None = None,
 ) -> None:
     """Write all run artifacts to run_dir.
 
@@ -92,18 +93,22 @@ def write_artifacts(
             "brief.md": brief_hash,
         }
 
-        if llm_result is not None:
+        if llm_result is not None or eval_scores_data is not None:
             timestamp = datetime.now(UTC)
-            llm_payload = {
-                "llm_result": llm_result.model_dump(mode="json"),
-                "raw_response": raw_response,
-                "rendered_system_prompt": rendered_system_prompt,
-                "rendered_user_prompt": rendered_user_prompt,
-                "model": llm_result.model,
-                "provider": llm_provider,
-                "timestamp": timestamp.isoformat(),
-                "prompt_hash": _prompt_hash(rendered_system_prompt, rendered_user_prompt),
-            }
+            llm_payload: dict = {}
+            if llm_result is not None:
+                llm_payload = {
+                    "llm_result": llm_result.model_dump(mode="json"),
+                    "raw_response": raw_response,
+                    "rendered_system_prompt": rendered_system_prompt,
+                    "rendered_user_prompt": rendered_user_prompt,
+                    "model": llm_result.model,
+                    "provider": llm_provider,
+                    "timestamp": timestamp.isoformat(),
+                    "prompt_hash": _prompt_hash(rendered_system_prompt, rendered_user_prompt),
+                }
+            if eval_scores_data is not None:
+                llm_payload.update(eval_scores_data)
             llm_response_path.write_text(json.dumps(llm_payload, indent=2), encoding="utf-8")
             artifact_hashes["llm_response.json"] = file_sha256(llm_response_path)
 

@@ -27,12 +27,16 @@ from json import JSONDecodeError
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+import yaml
 from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel, Field, ValidationError
+
+from wbsb.eval.scorer import build_eval_scores
 
 logger = logging.getLogger(__name__)
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
+_CONFIG_PATH = Path(__file__).resolve().parents[3] / "config" / "rules.yaml"
 
 # Prompt version constants derived from template filenames.
 PROMPT_VERSION_SUMMARY = "summary_v1"
@@ -159,6 +163,8 @@ class AdapterLLMResult(BaseModel):
     key_story: str | None = None
     group_narratives: dict[str, str] | None = None
     watch_signals: list[dict[str, str]] | None = None
+    # Iteration 7 eval scores — populated by scorer wiring in generate()
+    eval_scores_data: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -786,6 +792,19 @@ def _log_fallback(reason: str, detail: str) -> None:
     logger.warning("LLM fallback triggered. Reason: %s — %s", reason, detail)
 
 
+def build_llm_fallback_eval_data() -> dict:
+    """Return eval_scores_data for the LLM fallback path.
+
+    When generate() returns None (LLM call failed or response invalid),
+    callers that persist eval state should use this data to record that
+    the scorer was intentionally skipped due to LLM fallback.
+
+    Returns:
+        {"eval_scores": None, "eval_skipped_reason": "llm_fallback"}
+    """
+    return {"eval_scores": None, "eval_skipped_reason": "llm_fallback"}
+
+
 # ---------------------------------------------------------------------------
 # Public generate() API
 # ---------------------------------------------------------------------------
@@ -869,6 +888,24 @@ def generate(
         if hasattr(resolved_client, "model")
         else ""
     )
-    return result.model_copy(
+    final_result = result.model_copy(
         update={"prompt_version": prompt_version, "model": model_name}
     )
+
+    # Scorer wiring — path 2 (success) or path 3 (scorer error)
+    try:
+        eval_cfg = yaml.safe_load(_CONFIG_PATH.read_text()).get("eval", {})
+        eval_scores = build_eval_scores(ctx["findings"], final_result, eval_cfg)
+        eval_scores_data: dict = {
+            "eval_scores": eval_scores.model_dump(),
+            "eval_skipped_reason": None,
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.error("eval.scorer.error: %s", str(exc))
+        eval_scores_data = {
+            "eval_scores": None,
+            "eval_skipped_reason": "scorer_error",
+            "eval_error": str(exc),
+        }
+
+    return final_result.model_copy(update={"eval_scores_data": eval_scores_data})

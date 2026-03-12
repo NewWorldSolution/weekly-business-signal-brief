@@ -11,6 +11,11 @@ history:
   stable_band_pct: 0.02       # week-over-week change within ±2% is considered stable
   stable_min_weeks: 3         # minimum weeks of stability to assign the stable label
 
+eval:
+  grounding_tolerance_abs: 0.01
+  grounding_tolerance_rel: 0.01
+  grounding_pct_normalization: true
+
 rules:
   - id: A1
     label: Revenue Decline

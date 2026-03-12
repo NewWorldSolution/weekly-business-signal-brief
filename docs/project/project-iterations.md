@@ -17,7 +17,7 @@
 | I5 | Analytical Reasoning Upgrade | ✅ Complete | ✅ |
 | I6 | Historical Memory & Trend Awareness | ✅ Complete | ✅ |
 | I9 | Deployment & Delivery | 🔲 Planned | ✅ |
-| I7 | Evaluation Framework & Feedback Loop | 🔲 Planned | ✅ |
+| I7 | Evaluation Framework & Feedback Loop | ✅ Complete | ✅ |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned | — |
 | I10 | Multi-File Data Consolidation | 🔲 Planned | — |
 
@@ -385,7 +385,7 @@ tests/test_delivery.py             ← new: card/block rendering tests (no live 
 ---
 
 ## Iteration 7 — Evaluation Framework & Operator Feedback Loop
-**Status:** 🔲 Planned | **MVP:** ✅ Required
+**Status:** ✅ Complete | **MVP:** ✅ Required
 
 ### Goal
 Close the quality loop. By this point the system is live and delivering reports to real operators. Iteration 7 introduces two mechanisms: automated scoring that runs on every LLM output, and a structured feedback system that lets operators flag what's right, surprising, or wrong. Together, these create a compounding improvement cycle.
