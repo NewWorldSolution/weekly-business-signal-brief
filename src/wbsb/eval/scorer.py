@@ -1,6 +1,8 @@
 """Evaluation scorer utilities for Iteration 7."""
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from wbsb.domain.models import Findings, LLMResult
 from wbsb.eval.extractor import (
     build_evidence_allowlist,
@@ -8,6 +10,7 @@ from wbsb.eval.extractor import (
     extract_numbers_from_text,
     is_grounded,
 )
+from wbsb.eval.models import EvalScores
 
 
 def score_grounding(findings: Findings, llm_result: LLMResult, cfg: dict) -> dict:
@@ -201,3 +204,36 @@ def score_hallucination(findings: Findings, llm_result: LLMResult) -> dict:
         "hallucination_risk": len(violations),
         "hallucination_violations": violations,
     }
+
+
+def build_eval_scores(
+    findings: Findings,
+    llm_result: LLMResult,
+    cfg: dict,
+) -> EvalScores:
+    """
+    Combine grounding, coverage, and hallucination results into a single EvalScores.
+
+    Args:
+        findings:   Pydantic Findings from the pipeline.
+        llm_result: Pydantic LLMResult from the LLM adapter.
+        cfg:        The eval section from config/rules.yaml (a dict).
+
+    Returns:
+        EvalScores instance with all fields populated.
+    """
+    grounding_result = score_grounding(findings, llm_result, cfg)
+    coverage_result = score_signal_coverage(findings, llm_result)
+    hallucination_result = score_hallucination(findings, llm_result)
+
+    return EvalScores(
+        grounding=grounding_result["grounding"],
+        grounding_reason=grounding_result["grounding_reason"],
+        flagged_numbers=grounding_result["flagged_numbers"],
+        signal_coverage=coverage_result["signal_coverage"],
+        group_coverage=coverage_result["group_coverage"],
+        hallucination_risk=hallucination_result["hallucination_risk"],
+        hallucination_violations=hallucination_result["hallucination_violations"],
+        model=llm_result.model,
+        evaluated_at=datetime.now(UTC).isoformat(),
+    )

@@ -58,13 +58,28 @@ ruff check .
 
 ## What to Build
 
-### Allowed files (exactly these four, no others)
+### Scope correction (2026-03-12)
+
+The original 4-file scope was insufficient. The original requirement "eval_scores_data must
+be included in the data written to llm_response.json" cannot be satisfied without touching
+the artifact writing layer. `llm_adapter.py` does NOT write `llm_response.json` — that logic
+lives in `export/write.py`, orchestrated by `pipeline.py` via `render/llm.py`.
+
+`domain/models.py` remains **frozen** — do not add `eval_scores_data` to `LLMResult`.
+Instead, thread `eval_scores_data` as an explicit dict through the call chain.
+
+### Allowed files (expanded — nine files total)
 
 ```
 src/wbsb/eval/scorer.py          ← extend (add build_eval_scores)
 src/wbsb/render/llm_adapter.py   ← extend (wire scorer after validate_response)
+src/wbsb/render/llm.py           ← extend (add llm_eval_out out-param to render_llm)
+src/wbsb/export/write.py         ← extend (add eval_scores_data param; write on fallback)
+src/wbsb/pipeline.py             ← extend (thread eval_scores_data to write_artifacts)
 tests/test_eval_scorer.py        ← extend (add 1 new test)
 tests/test_llm_adapter.py        ← extend (add 3 new tests)
+tests/test_eval_artifact.py      ← new file (3 tests for artifact writing)
+tests/test_llm_integration.py    ← update 1 test (fallback now writes llm_response.json)
 ```
 
 ---
@@ -165,19 +180,105 @@ except Exception as exc:
     }
 ```
 
-**The `eval_scores_data` dict must be included in the data written to `llm_response.json`.**
+**`generate()` must continue to return `None` on failure** — changing the return type breaks
+`test_llm_integration.py`. Instead, attach `eval_scores_data` to `AdapterLLMResult.eval_scores_data`
+on success/scorer-error paths (already done), and expose `build_llm_fallback_eval_data()` as a
+public helper for callers that handle the `None` return.
 
-Read the existing write logic for `llm_response.json` in `llm_adapter.py` and merge
-`eval_scores_data` into the artifact. Do not replace existing artifact fields.
+**Part B2 — Thread `eval_scores_data` to `llm_response.json` via `render_llm.py` and `write.py`**
+
+See Part C and Part D below for how `eval_scores_data` reaches the artifact.
 
 **Non-breaking rule:** on scorer error (Path 3), report generation must continue.
 The pipeline must not return exit code 1 due to a scorer failure.
 
 ---
 
+### Part C — Thread `eval_scores_data` through `src/wbsb/render/llm.py`
+
+Add an optional `llm_eval_out: dict | None = None` parameter to `render_llm()`. The return
+signature (4-tuple) must NOT change — that would break existing callers.
+
+```python
+def render_llm(
+    findings, mode, provider, client=None, trend_context=None,
+    llm_eval_out: dict | None = None,  # NEW — out-param, caller reads after return
+) -> tuple[str, LLMResult | None, str, str]:
+    ...
+    adapter_result = llm_adapter.generate(...)
+
+    if adapter_result is None:
+        if llm_eval_out is not None:
+            llm_eval_out["eval_scores_data"] = llm_adapter.build_llm_fallback_eval_data()
+        return render_template(findings), None, rendered_system_prompt, rendered_user_prompt
+
+    if llm_eval_out is not None:
+        llm_eval_out["eval_scores_data"] = adapter_result.eval_scores_data
+    ...
+```
+
+---
+
+### Part D — Add `eval_scores_data` to `src/wbsb/export/write.py`
+
+Add `eval_scores_data: dict | None = None` to `write_artifacts()`. Merge into `llm_payload`
+when present. Write `llm_response.json` even when `llm_result is None` if `eval_scores_data`
+is provided (covers the LLM fallback path).
+
+```python
+def write_artifacts(..., eval_scores_data: dict | None = None) -> None:
+    ...
+    if llm_result is not None or eval_scores_data is not None:
+        timestamp = datetime.now(UTC)
+        llm_payload: dict = {}
+        if llm_result is not None:
+            llm_payload = {
+                "llm_result": llm_result.model_dump(mode="json"),
+                "raw_response": raw_response,
+                "rendered_system_prompt": rendered_system_prompt,
+                "rendered_user_prompt": rendered_user_prompt,
+                "model": llm_result.model,
+                "provider": llm_provider,
+                "timestamp": timestamp.isoformat(),
+                "prompt_hash": _prompt_hash(rendered_system_prompt, rendered_user_prompt),
+            }
+        if eval_scores_data is not None:
+            llm_payload.update(eval_scores_data)
+        llm_response_path.write_text(json.dumps(llm_payload, indent=2), encoding="utf-8")
+        artifact_hashes["llm_response.json"] = file_sha256(llm_response_path)
+```
+
+---
+
+### Part E — Thread `eval_scores_data` in `src/wbsb/pipeline.py`
+
+Create `llm_eval_out: dict = {}` before the `if llm_mode == "off":` branch. Pass it to
+`render_llm()`. Forward `llm_eval_out.get("eval_scores_data")` to `write_artifacts()`.
+
+```python
+llm_eval_out: dict = {}
+if llm_mode == "off":
+    ...
+else:
+    ...
+    brief_md, llm_result, rendered_system_prompt, rendered_user_prompt = render_llm(
+        ..., llm_eval_out=llm_eval_out
+    )
+    ...
+
+write_artifacts(
+    ...,
+    eval_scores_data=llm_eval_out.get("eval_scores_data"),  # NEW
+)
+```
+
+---
+
 ## What NOT to Do
 
-- Do not add scorer wiring to `src/wbsb/pipeline.py` — wiring belongs only in `llm_adapter.py`.
+- Do not change the return signature of `render_llm()` — existing tests rely on 4-tuple unpacking.
+- Do not add `eval_scores_data` to `LLMResult` in `domain/models.py` — domain model is frozen.
+- Do not add scorer wiring directly to `pipeline.py` — scorer wiring belongs in `llm_adapter.py`.
 - Do not modify `score_grounding()`, `score_signal_coverage()`, or `score_hallucination()`.
 - Do not modify `src/wbsb/eval/models.py` or `src/wbsb/domain/models.py`.
 - Do not modify `config/rules.yaml`.
@@ -234,9 +335,28 @@ def test_eval_scores_null_on_scorer_error():
 ```python
 def test_eval_scores_null_on_llm_fallback():
     # Simulate path where llm_result is None (LLM fallback mode)
-    # Assert artifact has eval_scores=null, eval_skipped_reason="llm_fallback"
+    # Assert generate() returns None (unchanged contract)
     # Assert build_eval_scores was NOT called
+    # Assert build_llm_fallback_eval_data() returns correct structure
 ```
+
+### In `tests/test_eval_artifact.py` — add 3 tests (NEW FILE)
+
+These test the artifact writing end-to-end via `write_artifacts()` directly:
+
+#### `test_eval_scores_in_llm_response_on_success`
+- Call `write_artifacts()` with real `llm_result` and `eval_scores_data` containing grounding score
+- Assert `llm_response.json` exists and contains `eval_scores` with grounding key
+- Assert `eval_skipped_reason` is `null`
+
+#### `test_eval_scores_null_on_scorer_error_in_artifact`
+- Call `write_artifacts()` with `llm_result` and `eval_scores_data={"eval_scores": null, "eval_skipped_reason": "scorer_error"}`
+- Assert `llm_response.json` has `eval_scores=null`, `eval_skipped_reason="scorer_error"`
+
+#### `test_eval_scores_written_on_llm_fallback_artifact`
+- Call `write_artifacts()` with `llm_result=None` and `eval_scores_data={"eval_scores": null, "eval_skipped_reason": "llm_fallback"}`
+- Assert `llm_response.json` IS written (even without llm_result)
+- Assert it contains `eval_scores=null`, `eval_skipped_reason="llm_fallback"`
 
 ---
 
@@ -245,18 +365,22 @@ def test_eval_scores_null_on_llm_fallback():
 Before marking the PR ready for review, confirm:
 
 ```bash
-pytest --tb=short -q
-# Expected: 306 passing (302 existing + 4 new), 0 failures
+PYTHONPATH=src pytest --tb=short -q
+# Expected: 318 passing (315 existing + 3 new), 0 failures
 
 ruff check .
 # Expected: no issues
 
-git diff --name-only feature/iteration-7
-# Expected exactly:
+git diff --name-only origin/feature/iteration-7
+# Expected exactly (8 files):
 # src/wbsb/eval/scorer.py
 # src/wbsb/render/llm_adapter.py
+# src/wbsb/render/llm.py
+# src/wbsb/export/write.py
+# src/wbsb/pipeline.py
 # tests/test_eval_scorer.py
 # tests/test_llm_adapter.py
+# tests/test_eval_artifact.py
 ```
 
 ---
