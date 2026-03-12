@@ -74,5 +74,45 @@ def version() -> None:
     typer.echo(__version__)
 
 
+feedback_app = typer.Typer()
+app.add_typer(feedback_app, name="feedback")
+
+
+@feedback_app.command("list")
+def feedback_list(limit: int = typer.Option(50, "--limit", help="Max entries to show.")):
+    """List recent feedback entries."""
+    from wbsb.feedback.store import list_feedback
+
+    entries = list_feedback(limit=limit)
+    for e in entries:
+        typer.echo(f"[{e.submitted_at}] {e.run_id} | {e.section} | {e.label} | {e.comment[:80]}")
+
+
+@feedback_app.command("summary")
+def feedback_summary():
+    """Show feedback summary by label and section."""
+    from wbsb.feedback.store import summarize_feedback
+
+    summary = summarize_feedback()
+    typer.echo(f"Total: {summary['total']}")
+    typer.echo("By label:")
+    for label, count in summary["by_label"].items():
+        typer.echo(f"  {label}: {count}")
+    typer.echo("By section:")
+    for section, count in summary["by_section"].items():
+        typer.echo(f"  {section}: {count}")
+
+
+@feedback_app.command("export")
+def feedback_export(run_id: str = typer.Option(..., "--run-id", help="Run ID to export.")):
+    """Export all feedback for a specific run."""
+    import json
+
+    from wbsb.feedback.store import export_feedback
+
+    entries = export_feedback(run_id)
+    typer.echo(json.dumps([e.model_dump() for e in entries], indent=2))
+
+
 if __name__ == "__main__":
     app()
