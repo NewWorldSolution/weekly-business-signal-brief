@@ -2,16 +2,18 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from types import SimpleNamespace
 
 from wbsb.domain.models import (
     Findings,
     LLMResult,
     LLMSignalNarratives,
+    MetricResult,
     Periods,
     RunMeta,
     Signal,
 )
-from wbsb.eval.scorer import score_signal_coverage
+from wbsb.eval.scorer import score_hallucination, score_signal_coverage
 
 
 def _findings(signals: list[Signal]) -> Findings:
@@ -58,6 +60,18 @@ def _llm(
         signal_narratives=LLMSignalNarratives(narratives=signal_narratives),
         model="claude-haiku-4-5-20251001",
         group_narratives=group_narratives,
+    )
+
+
+def _findings_stub(
+    signals: list[Signal],
+    metrics: list[MetricResult] | None = None,
+    dominant_cluster_exists: bool = True,
+):
+    return SimpleNamespace(
+        signals=signals,
+        metrics=metrics if metrics is not None else [],
+        dominant_cluster_exists=dominant_cluster_exists,
     )
 
 
@@ -119,3 +133,143 @@ def test_group_coverage_no_categories():
     scores = score_signal_coverage(findings, llm_result)
 
     assert scores["group_coverage"] == 1.0
+
+
+def test_hallucination_clean_output():
+    findings = _findings_stub(
+        [_signal("A1", "Revenue")],
+        [MetricResult(id="net_revenue", name="n", unit="u")],
+    )
+    llm_result = LLMResult(
+        executive_summary="",
+        model="claude-haiku-4-5-20251001",
+        key_story="ok",
+        signal_narratives=LLMSignalNarratives(narratives={"A1": "text"}),
+        group_narratives={"revenue": "group text"},
+        watch_signals=[{"metric_or_signal": "A1", "observation": "watch"}],
+    )
+
+    result = score_hallucination(findings, llm_result)
+
+    assert result["hallucination_risk"] == 0
+    assert result["hallucination_violations"] == []
+
+
+def test_hallucination_key_story_no_cluster():
+    findings = _findings_stub([], dominant_cluster_exists=False)
+    llm_result = LLMResult(
+        executive_summary="",
+        model="claude-haiku-4-5-20251001",
+        key_story="Some key story text",
+        signal_narratives=LLMSignalNarratives(narratives={}),
+    )
+
+    result = score_hallucination(findings, llm_result)
+
+    assert result["hallucination_risk"] == 1
+    assert result["hallucination_violations"][0]["type"] == "key_story_when_no_cluster"
+    assert result["hallucination_violations"][0]["severity"] == "critical"
+
+
+def test_hallucination_invalid_watch_signal():
+    findings = _findings_stub(
+        [_signal("A1", "Revenue")],
+        [MetricResult(id="net_revenue", name="n", unit="u")],
+    )
+    llm_result = LLMResult(
+        executive_summary="",
+        model="claude-haiku-4-5-20251001",
+        signal_narratives=LLMSignalNarratives(narratives={"A1": "text"}),
+        group_narratives={"revenue": "group text"},
+        watch_signals=[{"metric_or_signal": "nonexistent_id", "observation": "watch"}],
+    )
+
+    result = score_hallucination(findings, llm_result)
+
+    assert result["hallucination_risk"] == 1
+    v = result["hallucination_violations"][0]
+    assert v["type"] == "invalid_watch_signal_id"
+    assert v["severity"] == "major"
+    assert "nonexistent_id" in v["detail"]
+
+
+def test_hallucination_invalid_group_category():
+    findings = _findings_stub(
+        [_signal("A1", "Revenue")],
+        [MetricResult(id="net_revenue", name="n", unit="u")],
+    )
+    llm_result = LLMResult(
+        executive_summary="",
+        model="claude-haiku-4-5-20251001",
+        signal_narratives=LLMSignalNarratives(narratives={"A1": "text"}),
+        group_narratives={"Nonexistent Category": "some text"},
+    )
+
+    result = score_hallucination(findings, llm_result)
+
+    assert result["hallucination_risk"] == 1
+    v = result["hallucination_violations"][0]
+    assert v["type"] == "invalid_group_narrative_category"
+    assert v["severity"] == "major"
+
+
+def test_hallucination_extra_signal_narrative():
+    findings = _findings_stub(
+        [_signal("A1", "Revenue")],
+        [MetricResult(id="net_revenue", name="n", unit="u")],
+    )
+    llm_result = LLMResult(
+        executive_summary="",
+        model="claude-haiku-4-5-20251001",
+        signal_narratives=LLMSignalNarratives(narratives={"rule_not_in_findings": "..."}),
+    )
+
+    result = score_hallucination(findings, llm_result)
+
+    assert result["hallucination_risk"] == 2
+    assert result["hallucination_violations"][0]["type"] == "extra_signal_narrative"
+    assert result["hallucination_violations"][0]["severity"] == "minor"
+
+
+def test_hallucination_missing_signal_narrative():
+    findings = _findings_stub(
+        [_signal("missing_rule", "Revenue")],
+        [MetricResult(id="net_revenue", name="n", unit="u")],
+    )
+    llm_result = LLMResult(
+        executive_summary="",
+        model="claude-haiku-4-5-20251001",
+        signal_narratives=LLMSignalNarratives(narratives={}),
+    )
+
+    result = score_hallucination(findings, llm_result)
+
+    assert result["hallucination_risk"] == 1
+    v = result["hallucination_violations"][0]
+    assert v["type"] == "missing_signal_narrative"
+    assert v["severity"] == "minor"
+    assert "missing_rule" in v["detail"]
+
+
+def test_hallucination_multiple_violations():
+    findings = _findings_stub(
+        [_signal("A1", "Revenue")],
+        [MetricResult(id="net_revenue", name="n", unit="u")],
+        dominant_cluster_exists=False,
+    )
+    llm_result = LLMResult(
+        executive_summary="",
+        model="claude-haiku-4-5-20251001",
+        key_story="Some key story text",
+        signal_narratives=LLMSignalNarratives(narratives={"extra_rule": "text"}),
+    )
+
+    result = score_hallucination(findings, llm_result)
+
+    assert result["hallucination_risk"] == len(result["hallucination_violations"])
+    assert result["hallucination_risk"] == 3
+    assert {v["type"] for v in result["hallucination_violations"]} == {
+        "key_story_when_no_cluster",
+        "extra_signal_narrative",
+        "missing_signal_narrative",
+    }
