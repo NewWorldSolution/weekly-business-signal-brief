@@ -69,7 +69,7 @@ def score_hallucination(findings: Findings, llm_result: LLMResult) -> dict:
         signal.category.lower().replace(" ", "_") for signal in findings.signals
     }
 
-    dominant_cluster_exists = getattr(findings, "dominant_cluster_exists", True)
+    dominant_cluster_exists = findings.dominant_cluster_exists
 
     signal_narratives_raw = llm_result.signal_narratives or {}
     if hasattr(signal_narratives_raw, "narratives"):

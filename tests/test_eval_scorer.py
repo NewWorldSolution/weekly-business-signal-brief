@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from types import SimpleNamespace
 
 from wbsb.domain.models import (
     Findings,
@@ -16,7 +15,11 @@ from wbsb.domain.models import (
 from wbsb.eval.scorer import score_hallucination, score_signal_coverage
 
 
-def _findings(signals: list[Signal]) -> Findings:
+def _findings(
+    signals: list[Signal],
+    metrics: list[MetricResult] | None = None,
+    dominant_cluster_exists: bool = False,
+) -> Findings:
     return Findings(
         run=RunMeta(
             run_id="run-i7-3",
@@ -31,8 +34,9 @@ def _findings(signals: list[Signal]) -> Findings:
             previous_week_start=date(2026, 3, 2),
             previous_week_end=date(2026, 3, 8),
         ),
-        metrics=[],
+        metrics=metrics if metrics is not None else [],
         signals=signals,
+        dominant_cluster_exists=dominant_cluster_exists,
         audit=[],
     )
 
@@ -60,18 +64,6 @@ def _llm(
         signal_narratives=LLMSignalNarratives(narratives=signal_narratives),
         model="claude-haiku-4-5-20251001",
         group_narratives=group_narratives,
-    )
-
-
-def _findings_stub(
-    signals: list[Signal],
-    metrics: list[MetricResult] | None = None,
-    dominant_cluster_exists: bool = True,
-):
-    return SimpleNamespace(
-        signals=signals,
-        metrics=metrics if metrics is not None else [],
-        dominant_cluster_exists=dominant_cluster_exists,
     )
 
 
@@ -136,9 +128,10 @@ def test_group_coverage_no_categories():
 
 
 def test_hallucination_clean_output():
-    findings = _findings_stub(
+    findings = _findings(
         [_signal("A1", "Revenue")],
         [MetricResult(id="net_revenue", name="n", unit="u")],
+        dominant_cluster_exists=True,
     )
     llm_result = LLMResult(
         executive_summary="",
@@ -156,7 +149,7 @@ def test_hallucination_clean_output():
 
 
 def test_hallucination_key_story_no_cluster():
-    findings = _findings_stub([], dominant_cluster_exists=False)
+    findings = _findings([], dominant_cluster_exists=False)
     llm_result = LLMResult(
         executive_summary="",
         model="claude-haiku-4-5-20251001",
@@ -172,9 +165,10 @@ def test_hallucination_key_story_no_cluster():
 
 
 def test_hallucination_invalid_watch_signal():
-    findings = _findings_stub(
+    findings = _findings(
         [_signal("A1", "Revenue")],
         [MetricResult(id="net_revenue", name="n", unit="u")],
+        dominant_cluster_exists=True,
     )
     llm_result = LLMResult(
         executive_summary="",
@@ -194,9 +188,10 @@ def test_hallucination_invalid_watch_signal():
 
 
 def test_hallucination_invalid_group_category():
-    findings = _findings_stub(
+    findings = _findings(
         [_signal("A1", "Revenue")],
         [MetricResult(id="net_revenue", name="n", unit="u")],
+        dominant_cluster_exists=True,
     )
     llm_result = LLMResult(
         executive_summary="",
@@ -214,9 +209,10 @@ def test_hallucination_invalid_group_category():
 
 
 def test_hallucination_extra_signal_narrative():
-    findings = _findings_stub(
+    findings = _findings(
         [_signal("A1", "Revenue")],
         [MetricResult(id="net_revenue", name="n", unit="u")],
+        dominant_cluster_exists=True,
     )
     llm_result = LLMResult(
         executive_summary="",
@@ -232,9 +228,10 @@ def test_hallucination_extra_signal_narrative():
 
 
 def test_hallucination_missing_signal_narrative():
-    findings = _findings_stub(
+    findings = _findings(
         [_signal("missing_rule", "Revenue")],
         [MetricResult(id="net_revenue", name="n", unit="u")],
+        dominant_cluster_exists=True,
     )
     llm_result = LLMResult(
         executive_summary="",
@@ -252,7 +249,7 @@ def test_hallucination_missing_signal_narrative():
 
 
 def test_hallucination_multiple_violations():
-    findings = _findings_stub(
+    findings = _findings(
         [_signal("A1", "Revenue")],
         [MetricResult(id="net_revenue", name="n", unit="u")],
         dominant_cluster_exists=False,

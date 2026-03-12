@@ -88,6 +88,7 @@ class Findings(BaseModel):
     periods: Periods
     metrics: list[MetricResult]
     signals: list[Signal]
+    dominant_cluster_exists: bool = False
     audit: list[AuditEvent]
 
 
