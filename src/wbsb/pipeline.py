@@ -116,6 +116,7 @@ def execute(
         llm_result = None
         rendered_system_prompt = ""
         rendered_user_prompt = ""
+        llm_eval_out: dict = {}
 
         if llm_mode == "off":
             log.info("render.template")
@@ -141,6 +142,7 @@ def execute(
                 mode=llm_mode,
                 provider=llm_provider,
                 trend_context=trend_context,
+                llm_eval_out=llm_eval_out,
             )
             if llm_result is None:
                 log.info("render.llm.fallback", mode=llm_mode, provider=llm_provider)
@@ -168,6 +170,7 @@ def execute(
             llm_provider=llm_provider,
             rendered_system_prompt=rendered_system_prompt,
             rendered_user_prompt=rendered_user_prompt,
+            eval_scores_data=llm_eval_out.get("eval_scores_data"),
         )
 
         run_record: RunRecord = {

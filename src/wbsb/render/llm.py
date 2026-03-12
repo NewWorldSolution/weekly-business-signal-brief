@@ -57,6 +57,7 @@ def render_llm(
     provider: str,
     client: LLMClientProtocol | None = None,
     trend_context: dict | None = None,
+    llm_eval_out: dict | None = None,
 ) -> tuple[str, LLMResult | None, str, str]:
     """Render the brief using an LLM overlay with deterministic fallback.
 
@@ -97,8 +98,13 @@ def render_llm(
     )
 
     if adapter_result is None:
+        if llm_eval_out is not None:
+            llm_eval_out["eval_scores_data"] = llm_adapter.build_llm_fallback_eval_data()
         logger.info("render_llm: adapter returned None, using deterministic fallback")
         return render_template(findings), None, rendered_system_prompt, rendered_user_prompt
+
+    if llm_eval_out is not None:
+        llm_eval_out["eval_scores_data"] = adapter_result.eval_scores_data
 
     llm_result = _adapter_to_domain(adapter_result)
     brief_md = _build_enriched_brief(findings, llm_result)
