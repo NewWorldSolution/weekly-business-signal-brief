@@ -792,6 +792,19 @@ def _log_fallback(reason: str, detail: str) -> None:
     logger.warning("LLM fallback triggered. Reason: %s — %s", reason, detail)
 
 
+def build_llm_fallback_eval_data() -> dict:
+    """Return eval_scores_data for the LLM fallback path.
+
+    When generate() returns None (LLM call failed or response invalid),
+    callers that persist eval state should use this data to record that
+    the scorer was intentionally skipped due to LLM fallback.
+
+    Returns:
+        {"eval_scores": None, "eval_skipped_reason": "llm_fallback"}
+    """
+    return {"eval_scores": None, "eval_skipped_reason": "llm_fallback"}
+
+
 # ---------------------------------------------------------------------------
 # Public generate() API
 # ---------------------------------------------------------------------------

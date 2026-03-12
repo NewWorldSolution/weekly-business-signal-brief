@@ -25,6 +25,7 @@ from wbsb.render.llm_adapter import (
     _EXECUTIVE_SUMMARY_MAX_CHARS,
     AdapterLLMResult,
     LLMClientProtocol,
+    build_llm_fallback_eval_data,
     build_prompt_inputs,
     generate,
     render_system_prompt,
@@ -1254,3 +1255,8 @@ def test_eval_scores_null_on_llm_fallback(monkeypatch):
 
     assert result is None  # LLM fallback — no AdapterLLMResult
     assert calls == []  # scorer was never invoked
+
+    # Verify the fallback contract structure callers should use when result is None
+    fallback = build_llm_fallback_eval_data()
+    assert fallback["eval_scores"] is None
+    assert fallback["eval_skipped_reason"] == "llm_fallback"
