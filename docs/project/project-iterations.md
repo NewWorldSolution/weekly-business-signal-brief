@@ -2,7 +2,7 @@
 ## Weekly Business Signal Brief — Full Roadmap
 
 **MVP Definition:** Iterations I1–I7 + I9 complete. **MVP is now complete.**
-**Post-MVP:** I8 (dashboard polish), I10 (multi-file data consolidation), I11 (security hardening).
+**Post-MVP execution order:** I11 (security hardening) → I8 (dashboard polish) → I10 (multi-file data consolidation). I11 runs first to secure the feedback endpoint before any shared deployment.
 
 ---
 
@@ -18,9 +18,9 @@
 | I6 | Historical Memory & Trend Awareness | ✅ Complete | ✅ |
 | I7 | Evaluation Framework & Feedback Loop | ✅ Complete | ✅ |
 | I9 | Deployment & Delivery | ✅ Complete | ✅ |
+| I11 | Security Hardening & Production Readiness | 🔲 Next | — |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned | — |
 | I10 | Multi-File Data Consolidation | 🔲 Planned | — |
-| I11 | Security Hardening & Production Readiness | 🔲 Planned | — |
 
 ---
 
