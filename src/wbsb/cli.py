@@ -41,6 +41,9 @@ def run(
     index_path: Path = typer.Option(
         Path("runs/index.json"), "--index-path", help="History index path (--auto mode)"
     ),
+    deliver: bool = typer.Option(
+        False, "--deliver", help="Deliver the report to configured channels after the run"
+    ),
 ) -> None:
     """Run the Weekly Business Signal Brief pipeline."""
     if auto:
@@ -52,6 +55,7 @@ def run(
             watch_dir=watch_dir,
             pattern=pattern,
             index_path=index_path,
+            deliver=deliver,
         )
         return
 
@@ -85,6 +89,10 @@ def run(
 
     from wbsb.pipeline import execute
 
+    # Snapshot existing run directories before the run so we can identify
+    # the new run by set difference rather than guessing by mtime.
+    prior_run_dirs: set[str] = _snapshot_run_dirs(output_dir)
+
     exit_code = execute(
         input_path=input_path,
         output_dir=output_dir,
@@ -93,6 +101,10 @@ def run(
         config_path=config_path,
         target_week=week,
     )
+
+    if exit_code == 0 and deliver:
+        _try_deliver(output_dir, prior_run_dirs)
+
     raise typer.Exit(exit_code)
 
 
@@ -104,12 +116,12 @@ def _run_auto(
     watch_dir: Path | None,
     pattern: str | None,
     index_path: Path,
+    deliver: bool = False,
 ) -> None:
     """Execute the auto-run flow: discover → check → run pipeline.
 
     Loads scheduler defaults from config/delivery.yaml when present; CLI
-    arguments override config values. Post-run delivery to Teams/Slack is
-    NOT triggered here — that is I9-5's responsibility.
+    arguments override config values.
     """
     from wbsb.scheduler.auto import already_processed, find_latest_input
 
@@ -179,6 +191,8 @@ def _run_auto(
 
     from wbsb.pipeline import execute
 
+    prior_run_dirs: set[str] = _snapshot_run_dirs(output_dir)
+
     exit_code = execute(
         input_path=candidate,
         output_dir=output_dir,
@@ -187,7 +201,103 @@ def _run_auto(
         config_path=config_path,
         target_week=None,
     )
+
+    if exit_code == 0 and deliver:
+        _try_deliver(output_dir, prior_run_dirs)
+
     raise typer.Exit(exit_code)
+
+
+def _snapshot_run_dirs(output_dir: Path) -> set[str]:
+    """Return the set of subdirectory names currently in output_dir."""
+    if not output_dir.exists():
+        return set()
+    try:
+        return {d.name for d in output_dir.iterdir() if d.is_dir()}
+    except OSError:
+        return set()
+
+
+def _try_deliver(output_dir: Path, prior_run_dirs: set[str]) -> None:
+    """Find the run just completed by set-difference and deliver it.
+
+    Never raises — all failures are reported to stdout/stderr and swallowed
+    so the run exit code is unaffected.
+    """
+    from wbsb.delivery.config import load_delivery_config
+    from wbsb.delivery.models import DeliveryStatus
+    from wbsb.delivery.orchestrator import deliver_run
+
+    delivery_config_path = Path("config/delivery.yaml")
+    if not delivery_config_path.exists():
+        typer.echo("Delivery: config/delivery.yaml not found — skipping.", err=True)
+        return
+
+    try:
+        delivery_cfg = load_delivery_config(delivery_config_path)
+    except Exception as exc:
+        typer.echo(f"Delivery: error loading config — {exc}", err=True)
+        return
+
+    try:
+        current_dirs = {d.name for d in output_dir.iterdir() if d.is_dir()}
+    except OSError as exc:
+        typer.echo(f"Delivery: cannot read output directory — {exc}", err=True)
+        return
+
+    new_dirs = current_dirs - prior_run_dirs
+    if not new_dirs:
+        typer.echo("Delivery: could not identify the completed run — skipping.", err=True)
+        return
+
+    run_id = next(iter(new_dirs))
+
+    try:
+        results = deliver_run(run_id, delivery_cfg, output_dir)
+    except Exception as exc:
+        typer.echo(f"Delivery: unexpected error — {exc}", err=True)
+        return
+
+    for r in results:
+        if r.status == DeliveryStatus.success:
+            typer.echo(f"✅ {r.target.value}: delivered")
+        else:
+            typer.echo(f"⚠️  Delivery failed ({r.target.value}): {r.error}")
+
+
+@app.command("deliver")
+def deliver_cmd(
+    run_id: str = typer.Option(..., "--run-id", help="Run ID to deliver"),
+    output_dir: Path = typer.Option(
+        Path("runs"), "--output", "-o", help="Output directory containing runs"
+    ),
+    config_path: Path = typer.Option(
+        Path("config/delivery.yaml"), "--config", "-c", help="Delivery config YAML"
+    ),
+) -> None:
+    """Deliver a completed run to configured channels (Teams/Slack)."""
+    from wbsb.delivery.config import load_delivery_config
+    from wbsb.delivery.models import DeliveryStatus
+    from wbsb.delivery.orchestrator import deliver_run
+
+    try:
+        delivery_cfg = load_delivery_config(config_path)
+    except (FileNotFoundError, ValueError) as exc:
+        typer.echo(f"Error loading delivery config: {exc}", err=True)
+        raise typer.Exit(1)
+
+    results = deliver_run(run_id, delivery_cfg, output_dir)
+
+    any_failed = False
+    for r in results:
+        if r.status == DeliveryStatus.success:
+            typer.echo(f"✅ {r.target.value}: delivered")
+        else:
+            typer.echo(f"❌ {r.target.value}: failed — {r.error}")
+            any_failed = True
+
+    if any_failed:
+        raise typer.Exit(1)
 
 
 @app.command("eval")
