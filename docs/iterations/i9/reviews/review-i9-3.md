@@ -98,14 +98,18 @@ Confirm required tests exist and assertions verify structure/content, not only e
 
 ## Required Output Format
 
-1. Verdict
+1. Verdict (`PASS | CHANGES REQUIRED | BLOCKED`)
 2. What's Correct
 3. Problems Found
+   - severity: `critical | major | minor`
+   - file: `path:line`
+   - exact problem
+   - why it matters
 4. Missing or Weak Tests
 5. Scope Violations
-6. Acceptance Criteria Check
+6. Acceptance Criteria Check (`[PASS]` or `[FAIL]` per line)
 7. Exact Fixes Required
-8. Final Recommendation
+8. Final Recommendation (`approve | request changes | block`)
 
 ---
 

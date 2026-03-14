@@ -24,14 +24,28 @@ This adds the first inbound HTTP endpoint: `POST /feedback`.
 
 ---
 
-## Step 0 — Branch Setup
+## Step 0 — Worktree Setup and Draft PR
+
+Your dedicated branch and worktree are already created:
+- **Branch:** `feature/i9-7-feedback-webhook`
+- **Worktree:** `../wbsb-i9-7-feedback-webhook`
 
 ```bash
-git checkout feature/iteration-9
-git pull origin feature/iteration-9
+# 1. Confirm you are on the correct branch
+git branch --show-current   # must output: feature/i9-7-feedback-webhook
 
-git checkout -b feature/i9-7-feedback-webhook
-git push -u origin feature/i9-7-feedback-webhook
+# 2. Sync with any upstream changes to the iteration base
+git fetch origin
+git rebase origin/feature/iteration-9
+
+# 3. Verify baseline before any edits
+pytest --tb=short -q
+ruff check .
+
+# 4. Open draft PR before implementing
+#    Branch must have at least one commit ahead of base:
+git commit --allow-empty -m "chore(i9-7): open draft — baseline verified"
+git push
 
 gh pr create \
   --base feature/iteration-9 \
@@ -39,10 +53,17 @@ gh pr create \
   --title "I9-7: feedback webhook server" \
   --body "Work in progress." \
   --draft
-
-pytest --tb=short -q
-ruff check .
 ```
+
+**Do not implement in any other branch or worktree.**
+
+**Dependency:** Do not begin implementation until `feature/i9-5-cli-integration` is merged into `feature/iteration-9`. After that merge, sync before implementing:
+
+```bash
+git fetch origin && git rebase origin/feature/iteration-9
+```
+
+**Parallel conflict note:** I9-6 (`feature/i9-6-failure-alerting`) runs in parallel with this task and also modifies `src/wbsb/cli.py`. The second of these tasks to merge into `feature/iteration-9` will need to resolve a conflict on that file. Keep CLI additions minimal and scoped to the `wbsb feedback serve` command only.
 
 ---
 

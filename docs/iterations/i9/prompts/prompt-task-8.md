@@ -21,14 +21,28 @@ This task packages WBSB for deployment and enforces security hygiene checks.
 
 ---
 
-## Step 0 — Branch Setup
+## Step 0 — Worktree Setup and Draft PR
+
+Your dedicated branch and worktree are already created:
+- **Branch:** `feature/i9-8-containerization`
+- **Worktree:** `../wbsb-i9-8-containerization`
 
 ```bash
-git checkout feature/iteration-9
-git pull origin feature/iteration-9
+# 1. Confirm you are on the correct branch
+git branch --show-current   # must output: feature/i9-8-containerization
 
-git checkout -b feature/i9-8-containerization
-git push -u origin feature/i9-8-containerization
+# 2. Sync with any upstream changes to the iteration base
+git fetch origin
+git rebase origin/feature/iteration-9
+
+# 3. Verify baseline before any edits
+pytest --tb=short -q
+ruff check .
+
+# 4. Open draft PR before implementing
+#    Branch must have at least one commit ahead of base:
+git commit --allow-empty -m "chore(i9-8): open draft — baseline verified"
+git push
 
 gh pr create \
   --base feature/iteration-9 \
@@ -36,9 +50,18 @@ gh pr create \
   --title "I9-8: containerization and security hardening" \
   --body "Work in progress." \
   --draft
+```
 
-pytest --tb=short -q
-ruff check .
+**Do not implement in any other branch or worktree.**
+
+**Dependency:** Do not begin implementation until both of the following are merged into `feature/iteration-9`:
+- `feature/i9-6-failure-alerting`
+- `feature/i9-7-feedback-webhook`
+
+This task containerises the full app; both I9-6 and I9-7 must be merged first so the image captures the complete deployed surface. After those merges, sync before implementing:
+
+```bash
+git fetch origin && git rebase origin/feature/iteration-9
 ```
 
 ---

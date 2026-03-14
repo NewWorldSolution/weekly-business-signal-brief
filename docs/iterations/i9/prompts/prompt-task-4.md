@@ -26,14 +26,28 @@ This task adds scheduler decision logic and CLI auto-run support.
 
 ---
 
-## Step 0 — Branch Setup
+## Step 0 — Worktree Setup and Draft PR
+
+Your dedicated branch and worktree are already created:
+- **Branch:** `feature/i9-4-scheduler`
+- **Worktree:** `../wbsb-i9-4-scheduler`
 
 ```bash
-git checkout feature/iteration-9
-git pull origin feature/iteration-9
+# 1. Confirm you are on the correct branch
+git branch --show-current   # must output: feature/i9-4-scheduler
 
-git checkout -b feature/i9-4-scheduler
-git push -u origin feature/i9-4-scheduler
+# 2. Sync with any upstream changes to the iteration base
+git fetch origin
+git rebase origin/feature/iteration-9
+
+# 3. Verify baseline before any edits
+pytest --tb=short -q
+ruff check .
+
+# 4. Open draft PR before implementing
+#    Branch must have at least one commit ahead of base:
+git commit --allow-empty -m "chore(i9-4): open draft — baseline verified"
+git push
 
 gh pr create \
   --base feature/iteration-9 \
@@ -41,9 +55,14 @@ gh pr create \
   --title "I9-4: scheduler auto-run support" \
   --body "Work in progress." \
   --draft
+```
 
-pytest --tb=short -q
-ruff check .
+**Do not implement in any other branch or worktree.**
+
+**Dependency:** Do not begin implementation until `feature/i9-0-pre-work` is merged into `feature/iteration-9` (this task needs the `scheduler/` package scaffolding from I9-0). After that merge, sync before implementing:
+
+```bash
+git fetch origin && git rebase origin/feature/iteration-9
 ```
 
 ---
