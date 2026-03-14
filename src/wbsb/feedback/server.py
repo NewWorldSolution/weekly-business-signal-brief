@@ -23,20 +23,17 @@ Safe-write guarantees
 from __future__ import annotations
 
 import json
-import re
 import uuid
 from datetime import UTC, datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from wbsb.feedback.models import VALID_LABELS, VALID_SECTIONS, FeedbackEntry
-from wbsb.feedback.store import save_feedback
+from wbsb.feedback.store import RUN_ID_PATTERN, save_feedback
 from wbsb.observability.logging import get_logger
 
 MAX_BODY_BYTES: int = 4096
 MAX_COMMENT_CHARS: int = 1000
 MAX_OPERATOR_CHARS: int = 100
-
-_RUN_ID_RE = re.compile(r"^\d{8}T\d{6}Z_[a-f0-9]{6}$")
 
 _log = get_logger()
 
@@ -83,7 +80,7 @@ class FeedbackHandler(BaseHTTPRequestHandler):
         operator = str(operator_raw)[:MAX_OPERATOR_CHARS] if operator_raw else "anonymous"
 
         # ── Validation ────────────────────────────────────────────────────────
-        if not _RUN_ID_RE.match(run_id):
+        if not RUN_ID_PATTERN.match(run_id):
             self._send_json(
                 400, {"status": "error", "message": f"Invalid run_id: {run_id!r}"}
             )
