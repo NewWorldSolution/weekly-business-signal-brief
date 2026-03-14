@@ -12,11 +12,18 @@ from __future__ import annotations
 import fnmatch
 import json
 import logging
+from datetime import date, timedelta
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 MAX_INPUT_BYTES = 100 * 1024 * 1024  # 100 MB
+
+
+def _current_week_start() -> str:
+    """Return the ISO date string for Monday of the current calendar week."""
+    today = date.today()
+    return (today - timedelta(days=today.weekday())).isoformat()
 
 
 def find_latest_input(watch_dir: Path, pattern: str) -> Path | None:
@@ -80,12 +87,16 @@ def find_latest_input(watch_dir: Path, pattern: str) -> Path | None:
 
 
 def already_processed(input_path: Path, index_path: Path) -> bool:
-    """Check whether input_path has already been processed this cycle.
+    """Check whether this dataset's data for the current ISO week was already processed.
 
     Reads runs/index.json (written by I6 pipeline integration) and checks
-    whether any entry matches both the dataset key and the resolved input
-    file path. Uses derive_dataset_key() for dataset-scoped lookup,
-    consistent with the pipeline.
+    whether any entry matches the dataset key AND has a week_start equal to
+    the current calendar week's Monday. This prevents the scheduler from
+    re-running on the same logical dataset within the same week, regardless
+    of the exact input file path.
+
+    Uses derive_dataset_key() for dataset-scoped lookup, consistent with
+    the pipeline.
 
     Returns False if the index file is absent or unreadable.
 
@@ -94,7 +105,8 @@ def already_processed(input_path: Path, index_path: Path) -> bool:
         index_path: Path to the history index (e.g. runs/index.json).
 
     Returns:
-        True if the file has already been registered in the index.
+        True if data for the current week has already been processed for
+        this dataset.
     """
     from wbsb.history.store import derive_dataset_key
 
@@ -107,12 +119,12 @@ def already_processed(input_path: Path, index_path: Path) -> bool:
         return False
 
     dataset_key = derive_dataset_key(input_path)
-    input_str = str(input_path.resolve())
+    current_week = _current_week_start()
 
     for entry in entries:
         if (
             entry.get("dataset_key") == dataset_key
-            and entry.get("input_file") == input_str
+            and entry.get("week_start") == current_week
         ):
             return True
 

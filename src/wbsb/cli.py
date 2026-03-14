@@ -35,8 +35,8 @@ def run(
     watch_dir: Path | None = typer.Option(
         None, "--watch-dir", help="Directory to scan for input files (--auto mode)"
     ),
-    pattern: str = typer.Option(
-        "*.csv", "--pattern", help="Glob pattern for input files (--auto mode)"
+    pattern: str | None = typer.Option(
+        None, "--pattern", help="Glob pattern for input files (--auto mode)"
     ),
     index_path: Path = typer.Option(
         Path("runs/index.json"), "--index-path", help="History index path (--auto mode)"
@@ -102,20 +102,39 @@ def _run_auto(
     llm_provider: str,
     config_path: Path,
     watch_dir: Path | None,
-    pattern: str,
+    pattern: str | None,
     index_path: Path,
 ) -> None:
     """Execute the auto-run flow: discover → check → run pipeline.
 
-    Post-run delivery to Teams/Slack is NOT triggered here.
-    That is handled by I9-5 (wbsb deliver).
+    Loads scheduler defaults from config/delivery.yaml when present; CLI
+    arguments override config values. Post-run delivery to Teams/Slack is
+    NOT triggered here — that is I9-5's responsibility.
     """
     from wbsb.scheduler.auto import already_processed, find_latest_input
 
+    # Load scheduler defaults from config/delivery.yaml if available.
+    # CLI arguments take precedence over config values.
+    delivery_config_path = Path("config/delivery.yaml")
+    if delivery_config_path.exists():
+        try:
+            from wbsb.delivery.config import load_delivery_config
+
+            dcfg = load_delivery_config(delivery_config_path)
+            sched = dcfg.get("scheduler", {})
+            if watch_dir is None and sched.get("watch_directory"):
+                watch_dir = Path(sched["watch_directory"])
+            if pattern is None and sched.get("filename_pattern"):
+                pattern = sched["filename_pattern"]
+        except Exception:
+            pass
+
+    # Apply hardcoded fallbacks when neither config nor CLI provided values.
+    if pattern is None:
+        pattern = "*.csv"
+
     if watch_dir is None:
-        typer.echo(
-            "Error: --watch-dir is required in --auto mode.", err=True
-        )
+        typer.echo("Error: --watch-dir is required in --auto mode.", err=True)
         raise typer.Exit(1)
 
     if llm_mode not in _VALID_LLM_MODES:
@@ -142,7 +161,12 @@ def _run_auto(
         )
         raise typer.Exit(1)
 
-    candidate = find_latest_input(watch_dir, pattern)
+    try:
+        candidate = find_latest_input(watch_dir, pattern)
+    except ValueError as exc:
+        typer.echo(f"Auto-run: skipping — {exc}", err=True)
+        return
+
     if candidate is None:
         typer.echo("Auto-run: no processable input file found. Skipping.")
         return
