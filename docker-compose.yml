@@ -1,0 +1,9 @@
+services:
+  wbsb:
+    build: .
+    env_file: .env          # developer local — never committed
+    volumes:
+      - ./runs:/app/runs
+      - ./data:/app/data
+      - ./feedback:/app/feedback
+    command: wbsb run -i /app/data/incoming/latest.csv --llm-mode full --deliver
