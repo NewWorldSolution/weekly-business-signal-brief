@@ -373,5 +373,17 @@ def feedback_export(run_id: str = typer.Option(..., "--run-id", help="Run ID to 
     typer.echo(json.dumps([e.model_dump() for e in entries], indent=2))
 
 
+@feedback_app.command("serve")
+def feedback_serve(
+    host: str = typer.Option("0.0.0.0", "--host", help="Host to bind to"),
+    port: int = typer.Option(8080, "--port", help="Port to listen on"),
+) -> None:
+    """Start the feedback webhook server (POST /feedback)."""
+    from wbsb.feedback.server import run_server
+
+    typer.echo(f"Starting feedback server on {host}:{port}")
+    run_server(host=host, port=port)
+
+
 if __name__ == "__main__":
     app()
