@@ -55,7 +55,6 @@ def run(
             watch_dir=watch_dir,
             pattern=pattern,
             index_path=index_path,
-            deliver=deliver,
         )
         return
 
@@ -121,9 +120,11 @@ def _run_auto(
     watch_dir: Path | None,
     pattern: str | None,
     index_path: Path,
-    deliver: bool = False,
 ) -> None:
     """Execute the auto-run flow: discover → check → run pipeline.
+
+    Delivery is NOT triggered from auto mode. The scheduler is a run/no-run
+    decision layer only. Use ``wbsb deliver --run-id`` to deliver a completed run.
 
     Loads scheduler defaults from config/delivery.yaml when present; CLI
     arguments override config values.
@@ -143,8 +144,10 @@ def _run_auto(
                 watch_dir = Path(sched["watch_directory"])
             if pattern is None and sched.get("filename_pattern"):
                 pattern = sched["filename_pattern"]
-        except Exception:
-            pass
+        except Exception as exc:  # noqa: BLE001
+            typer.echo(
+                f"Warning: could not load scheduler config from delivery.yaml — {exc}", err=True
+            )
 
     # Apply hardcoded fallbacks when neither config nor CLI provided values.
     if pattern is None:
@@ -212,9 +215,6 @@ def _run_auto(
         typer.echo(f"⚠️  Pipeline error: {exc}", err=True)
         _try_send_pipeline_error_alert(str(exc), run_id=_recover_run_id(output_dir, prior_run_dirs))
         raise typer.Exit(1)
-
-    if exit_code == 0 and deliver:
-        _try_deliver(output_dir, prior_run_dirs)
 
     raise typer.Exit(exit_code)
 
@@ -288,10 +288,10 @@ def _try_deliver(output_dir: Path, prior_run_dirs: set[str]) -> None:
 
                 try:
                     send_alert(build_llm_fallback_alert(run_id), delivery_cfg)
-                except Exception:  # noqa: BLE001
-                    pass  # alert dispatch is best-effort
-    except Exception:  # noqa: BLE001
-        pass  # manifest unreadable; non-fatal
+                except Exception as exc:  # noqa: BLE001
+                    typer.echo(f"Warning: LLM fallback alert dispatch failed — {exc}", err=True)
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Warning: could not read manifest for LLM fallback check — {exc}", err=True)
 
     try:
         results = deliver_run(run_id, delivery_cfg, output_dir)
@@ -320,8 +320,8 @@ def _try_send_pipeline_error_alert(error: str, run_id: str | None) -> None:
             return
         alert = build_pipeline_error_alert(error, run_id)
         send_alert(alert, delivery_cfg)
-    except Exception:  # noqa: BLE001
-        pass  # alert dispatch is best-effort; never crash the CLI
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Warning: pipeline error alert dispatch failed — {exc}", err=True)
 
 
 def _try_send_no_file_alert(watch_directory: str) -> None:
@@ -338,8 +338,8 @@ def _try_send_no_file_alert(watch_directory: str) -> None:
             return
         alert = build_no_file_alert(watch_directory)
         send_alert(alert, delivery_cfg)
-    except Exception:  # noqa: BLE001
-        pass  # alert dispatch is best-effort; never crash the CLI
+    except Exception as exc:  # noqa: BLE001
+        typer.echo(f"Warning: no-new-file alert dispatch failed — {exc}", err=True)
 
 
 @app.command("deliver")

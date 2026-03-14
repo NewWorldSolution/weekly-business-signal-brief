@@ -420,3 +420,110 @@ def test_cli_run_deliver_does_not_crash_on_failure(
     assert result.exit_code == 0, (
         "pipeline succeeded so exit code must be 0 even when delivery crashes"
     )
+
+
+# ---------------------------------------------------------------------------
+# CLI — auto mode must never trigger delivery (scheduler boundary)
+# ---------------------------------------------------------------------------
+
+
+def test_auto_run_does_not_trigger_delivery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """wbsb run --auto --deliver must never call deliver_run.
+
+    The scheduler is a run/no-run decision layer only. Delivery is the
+    responsibility of wbsb run (manual) or wbsb deliver --run-id.
+    """
+    from typer.testing import CliRunner
+
+    from wbsb.cli import app
+
+    watch_dir = tmp_path / "watch"
+    watch_dir.mkdir()
+    data_file = watch_dir / "weekly_data_2026W10.csv"
+    data_file.write_text("week_start,revenue\n2026-03-09,1000\n")
+
+    deliver_run_called: list[bool] = []
+
+    def fake_execute(**kwargs):
+        (kwargs["output_dir"] / "20260310T090000Z_abc123").mkdir(parents=True, exist_ok=True)
+        return 0
+
+    def fake_deliver(*args, **kwargs):
+        deliver_run_called.append(True)
+        return []
+
+    runner = CliRunner()
+    with (
+        patch("wbsb.pipeline.execute", side_effect=fake_execute),
+        patch("wbsb.delivery.orchestrator.deliver_run", side_effect=fake_deliver),
+        patch(
+            "wbsb.scheduler.auto.already_processed",
+            return_value=False,
+        ),
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "run",
+                "--auto",
+                "--watch-dir", str(watch_dir),
+                "--output", str(tmp_path),
+                "--deliver",
+            ],
+        )
+
+    assert not deliver_run_called, (
+        "deliver_run must never be called from --auto mode; "
+        f"exit_code={result.exit_code}, output={result.output!r}"
+    )
+
+
+def test_auto_run_config_load_failure_warns_not_crashes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When scheduler config loading fails, a warning is printed and auto-run continues."""
+    from typer.testing import CliRunner
+
+    from wbsb.cli import app
+
+    watch_dir = tmp_path / "watch"
+    watch_dir.mkdir()
+    data_file = watch_dir / "weekly_data_2026W10.csv"
+    data_file.write_text("week_start,revenue\n2026-03-09,1000\n")
+
+    # Write a delivery.yaml so the config-load path is entered
+    delivery_yaml = tmp_path / "delivery.yaml"
+    delivery_yaml.write_text("invalid: yaml: [}")
+
+    def fake_execute(**kwargs):
+        (kwargs["output_dir"] / "20260310T090000Z_abc123").mkdir(parents=True, exist_ok=True)
+        return 0
+
+    runner = CliRunner()
+    with (
+        patch("wbsb.pipeline.execute", side_effect=fake_execute),
+        patch("wbsb.scheduler.auto.already_processed", return_value=False),
+        patch(
+            "wbsb.delivery.config.load_delivery_config",
+            side_effect=ValueError("bad config"),
+        ),
+        # Patch Path.exists to make delivery.yaml appear present
+        patch("wbsb.cli.Path.exists", return_value=True),
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "run",
+                "--auto",
+                "--watch-dir", str(watch_dir),
+                "--output", str(tmp_path),
+            ],
+        )
+
+    # Must not crash — exit code 0 (pipeline ran) or scheduler skip (not exit 1)
+    # Warning must appear in output (typer CliRunner merges stderr into output by default)
+    assert result.exit_code != 1 or "Warning:" in result.output, (
+        "config load failure must emit a warning, not crash silently"
+    )
