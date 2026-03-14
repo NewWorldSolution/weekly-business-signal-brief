@@ -13,7 +13,9 @@ _VALID_LLM_PROVIDERS = {"anthropic", "openai"}
 
 @app.command("run")
 def run(
-    input_path: Path = typer.Option(..., "--input", "-i", help="Input CSV or XLSX file"),
+    input_path: Path | None = typer.Option(
+        None, "--input", "-i", help="Input CSV or XLSX file (required unless --auto)"
+    ),
     output_dir: Path = typer.Option(
         Path("runs"), "--output", "-o", help="Output directory for runs"
     ),
@@ -27,8 +29,36 @@ def run(
     week: str = typer.Option(
         None, "--week", help="ISO week to analyse (YYYY-Www), defaults to latest"
     ),
+    auto: bool = typer.Option(
+        False, "--auto", help="Auto mode: discover and run on the latest unprocessed file"
+    ),
+    watch_dir: Path | None = typer.Option(
+        None, "--watch-dir", help="Directory to scan for input files (--auto mode)"
+    ),
+    pattern: str | None = typer.Option(
+        None, "--pattern", help="Glob pattern for input files (--auto mode)"
+    ),
+    index_path: Path = typer.Option(
+        Path("runs/index.json"), "--index-path", help="History index path (--auto mode)"
+    ),
 ) -> None:
     """Run the Weekly Business Signal Brief pipeline."""
+    if auto:
+        _run_auto(
+            output_dir=output_dir,
+            llm_mode=llm_mode,
+            llm_provider=llm_provider,
+            config_path=config_path,
+            watch_dir=watch_dir,
+            pattern=pattern,
+            index_path=index_path,
+        )
+        return
+
+    if input_path is None:
+        typer.echo("Error: --input / -i is required unless --auto is set.", err=True)
+        raise typer.Exit(1)
+
     if llm_mode not in _VALID_LLM_MODES:
         typer.echo(
             f"Error: --llm-mode must be one of: {', '.join(sorted(_VALID_LLM_MODES))}. "
@@ -62,6 +92,100 @@ def run(
         llm_provider=llm_provider,
         config_path=config_path,
         target_week=week,
+    )
+    raise typer.Exit(exit_code)
+
+
+def _run_auto(
+    output_dir: Path,
+    llm_mode: str,
+    llm_provider: str,
+    config_path: Path,
+    watch_dir: Path | None,
+    pattern: str | None,
+    index_path: Path,
+) -> None:
+    """Execute the auto-run flow: discover → check → run pipeline.
+
+    Loads scheduler defaults from config/delivery.yaml when present; CLI
+    arguments override config values. Post-run delivery to Teams/Slack is
+    NOT triggered here — that is I9-5's responsibility.
+    """
+    from wbsb.scheduler.auto import already_processed, find_latest_input
+
+    # Load scheduler defaults from config/delivery.yaml if available.
+    # CLI arguments take precedence over config values.
+    delivery_config_path = Path("config/delivery.yaml")
+    if delivery_config_path.exists():
+        try:
+            from wbsb.delivery.config import load_delivery_config
+
+            dcfg = load_delivery_config(delivery_config_path)
+            sched = dcfg.get("scheduler", {})
+            if watch_dir is None and sched.get("watch_directory"):
+                watch_dir = Path(sched["watch_directory"])
+            if pattern is None and sched.get("filename_pattern"):
+                pattern = sched["filename_pattern"]
+        except Exception:
+            pass
+
+    # Apply hardcoded fallbacks when neither config nor CLI provided values.
+    if pattern is None:
+        pattern = "*.csv"
+
+    if watch_dir is None:
+        typer.echo("Error: --watch-dir is required in --auto mode.", err=True)
+        raise typer.Exit(1)
+
+    if llm_mode not in _VALID_LLM_MODES:
+        typer.echo(
+            f"Error: --llm-mode must be one of: {', '.join(sorted(_VALID_LLM_MODES))}. "
+            f"Got: {llm_mode!r}",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    if llm_provider not in _VALID_LLM_PROVIDERS:
+        typer.echo(
+            f"Error: --llm-provider must be one of: {', '.join(sorted(_VALID_LLM_PROVIDERS))}. "
+            f"Got: {llm_provider!r}",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    if llm_provider == "openai":
+        typer.echo(
+            "Error: OpenAI provider is not yet implemented. "
+            "Use --llm-provider anthropic instead.",
+            err=True,
+        )
+        raise typer.Exit(1)
+
+    try:
+        candidate = find_latest_input(watch_dir, pattern)
+    except ValueError as exc:
+        typer.echo(f"Auto-run: skipping — {exc}", err=True)
+        return
+
+    if candidate is None:
+        typer.echo("Auto-run: no processable input file found. Skipping.")
+        return
+
+    if already_processed(candidate, index_path):
+        typer.echo(f"Auto-run: {candidate.name} already processed. Skipping.")
+        return
+
+    typer.echo(f"Auto-run: processing {candidate.name}")
+
+    from wbsb.pipeline import execute
+
+    exit_code = execute(
+        input_path=candidate,
+        output_dir=output_dir,
+        llm_mode=llm_mode,
+        llm_provider=llm_provider,
+        config_path=config_path,
+        target_week=None,
     )
     raise typer.Exit(exit_code)
 
