@@ -59,8 +59,27 @@ All three acquisition signals moved unfavorably this week.
 
 ### Requirements
 - Python 3.11+
-- Install: `pip install -e .`
-- For AI mode: `ANTHROPIC_API_KEY` in environment or `.env` file (copy `.env.example`)
+
+### Install
+
+```bash
+git clone https://github.com/NewWorldSolution/weekly-business-signal-brief.git
+cd weekly-business-signal-brief
+
+# Create and activate a virtual environment
+python3.11 -m venv .venv
+source .venv/bin/activate       # macOS / Linux
+# .venv\Scripts\activate        # Windows
+
+# Install the package and all dependencies
+pip install -e ".[dev]"
+```
+
+For AI mode, copy `.env.example` to `.env` and add your Anthropic API key:
+```bash
+cp .env.example .env
+# edit .env and set ANTHROPIC_API_KEY=sk-ant-...
+```
 
 ### Run a Report
 

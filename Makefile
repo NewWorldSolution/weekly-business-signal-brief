@@ -10,4 +10,4 @@ lint:
 	ruff check src/ tests/
 
 run-sample:
-	python -m wbsb.cli run --input examples/sample_weekly.csv --output runs --llm off
+	wbsb run -i examples/datasets/dataset_07_extreme_ad_spend.csv --llm-mode off
