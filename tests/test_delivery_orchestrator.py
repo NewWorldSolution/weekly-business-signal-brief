@@ -294,3 +294,129 @@ def test_deliver_run_llm_fallback_flag(
     assert captured_llm == [None], (
         "orchestrator must pass llm_result=None to card builders when fallback is detected"
     )
+
+
+# ---------------------------------------------------------------------------
+# deliver_run — missing-artifact capture (never raises)
+# ---------------------------------------------------------------------------
+
+
+def test_deliver_run_missing_artifacts_captured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """deliver_run() must return a failed DeliveryResult rather than raising when
+    the run directory or findings.json is absent."""
+    monkeypatch.setenv("TEAMS_WEBHOOK_URL", "https://teams.test")
+
+    # tmp_path has no run subdirectory — load_run_artifacts will raise FileNotFoundError
+    results = deliver_run(
+        "nonexistent_run_id",
+        _delivery_cfg(teams_enabled=True, slack_enabled=False),
+        tmp_path,
+    )
+
+    assert len(results) >= 1, "expected at least one failed DeliveryResult"
+    assert all(r.status == DeliveryStatus.failed for r in results)
+    assert any("findings.json" in (r.error or "") or "not found" in (r.error or "").lower()
+               for r in results)
+
+
+# ---------------------------------------------------------------------------
+# CLI — wbsb run --deliver correctness
+# ---------------------------------------------------------------------------
+
+
+def test_cli_run_deliver_correct_run_id(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """wbsb run --deliver must call deliver_run with the run_id just produced,
+    not with whatever directory happened to be most recently modified."""
+    from typer.testing import CliRunner
+
+    from wbsb.cli import app
+
+    run_id = "20260310T090000Z_correct1"
+    # Pre-populate a decoy run that is older — the mtime approach would pick
+    # this one if no snapshot is used.
+    decoy_dir = tmp_path / "20260309T080000Z_decoy0"
+    decoy_dir.mkdir()
+
+    captured: dict = {}
+
+    def fake_execute(**kwargs):
+        (kwargs["output_dir"] / run_id).mkdir(parents=True, exist_ok=True)
+        return 0
+
+    def fake_deliver(rid, cfg, out_dir=Path("runs")):
+        captured["run_id"] = rid
+        return []
+
+    monkeypatch.setenv("TEAMS_WEBHOOK_URL", "https://teams.test")
+    simple_cfg = {
+        "delivery": {
+            "teams": {"enabled": True, "webhook_url": "${TEAMS_WEBHOOK_URL}"},
+            "slack": {"enabled": False, "webhook_url": "${SLACK_WEBHOOK_URL}"},
+        }
+    }
+
+    input_file = tmp_path / "data.csv"
+    input_file.write_text("week_start,revenue\n2026-03-09,1000\n")
+
+    runner = CliRunner()
+    with (
+        patch("wbsb.pipeline.execute", side_effect=fake_execute),
+        patch("wbsb.delivery.config.load_delivery_config", return_value=simple_cfg),
+        patch("wbsb.delivery.orchestrator.deliver_run", side_effect=fake_deliver),
+    ):
+        runner.invoke(
+            app,
+            ["run", "-i", str(input_file), "--output", str(tmp_path), "--deliver"],
+        )
+
+    assert captured.get("run_id") == run_id, (
+        f"deliver_run was called with {captured.get('run_id')!r}, expected {run_id!r}"
+    )
+
+
+def test_cli_run_deliver_does_not_crash_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """wbsb run exit code must be 0 (pipeline success) even when delivery raises."""
+    from typer.testing import CliRunner
+
+    from wbsb.cli import app
+
+    run_id = "20260310T090000Z_crash01"
+
+    def fake_execute(**kwargs):
+        (kwargs["output_dir"] / run_id).mkdir(parents=True, exist_ok=True)
+        return 0
+
+    monkeypatch.setenv("TEAMS_WEBHOOK_URL", "https://teams.test")
+    simple_cfg = {
+        "delivery": {
+            "teams": {"enabled": True, "webhook_url": "${TEAMS_WEBHOOK_URL}"},
+            "slack": {"enabled": False, "webhook_url": "${SLACK_WEBHOOK_URL}"},
+        }
+    }
+
+    input_file = tmp_path / "data.csv"
+    input_file.write_text("week_start,revenue\n2026-03-09,1000\n")
+
+    runner = CliRunner()
+    with (
+        patch("wbsb.pipeline.execute", side_effect=fake_execute),
+        patch("wbsb.delivery.config.load_delivery_config", return_value=simple_cfg),
+        patch(
+            "wbsb.delivery.orchestrator.deliver_run",
+            side_effect=RuntimeError("delivery exploded"),
+        ),
+    ):
+        result = runner.invoke(
+            app,
+            ["run", "-i", str(input_file), "--output", str(tmp_path), "--deliver"],
+        )
+
+    assert result.exit_code == 0, (
+        "pipeline succeeded so exit code must be 0 even when delivery crashes"
+    )

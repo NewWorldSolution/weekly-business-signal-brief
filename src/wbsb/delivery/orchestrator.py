@@ -4,7 +4,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from wbsb.delivery.config import resolve_webhook_url, slack_enabled, teams_enabled
 from wbsb.delivery.models import DeliveryResult, DeliveryStatus, DeliveryTarget
 from wbsb.delivery.slack import build_slack_blocks, send_slack_message
 from wbsb.delivery.teams import build_teams_card, send_teams_card
@@ -15,8 +14,8 @@ def load_run_artifacts(run_id: str, output_dir: Path = Path("runs")) -> dict:
     """Load findings.json, manifest.json, and llm_response.json from runs/{run_id}/.
 
     Returns a dict with keys:
-        findings  — Findings instance
-        manifest  — raw dict from manifest.json
+        findings   — Findings instance
+        manifest   — raw dict from manifest.json
         llm_result — LLMResult instance, or None when absent
 
     Raises:
@@ -56,11 +55,51 @@ def deliver_run(
 ) -> list[DeliveryResult]:
     """Load artifacts for run_id and dispatch to all enabled delivery targets.
 
-    Returns one DeliveryResult per attempted target.  Raises FileNotFoundError
-    when the run artifacts are missing; all send-level errors are captured as
-    failed DeliveryResult entries — this function never raises from delivery.
+    Returns one DeliveryResult per attempted target.  Never raises — all errors
+    (including missing artifacts) are captured as failed DeliveryResult entries.
     """
-    artifacts = load_run_artifacts(run_id, output_dir)
+    # Lazy import: wbsb.delivery.config requires PyYAML; keeping it lazy means
+    # importing this module does not require yaml to be installed.
+    from wbsb.delivery.config import resolve_webhook_url, slack_enabled, teams_enabled
+
+    try:
+        artifacts = load_run_artifacts(run_id, output_dir)
+    except Exception as exc:  # noqa: BLE001
+        error_msg = f"Failed to load run artifacts: {exc}"
+        failed: list[DeliveryResult] = []
+        if teams_enabled(delivery_cfg):
+            failed.append(
+                DeliveryResult(
+                    target=DeliveryTarget.teams,
+                    status=DeliveryStatus.failed,
+                    http_status_code=None,
+                    error=error_msg,
+                    delivered_at=None,
+                )
+            )
+        if slack_enabled(delivery_cfg):
+            failed.append(
+                DeliveryResult(
+                    target=DeliveryTarget.slack,
+                    status=DeliveryStatus.failed,
+                    http_status_code=None,
+                    error=error_msg,
+                    delivered_at=None,
+                )
+            )
+        if not failed:
+            # No targets were enabled; return one sentinel result so the caller
+            # knows the load failed rather than getting a silent empty list.
+            failed.append(
+                DeliveryResult(
+                    target=DeliveryTarget.teams,
+                    status=DeliveryStatus.failed,
+                    http_status_code=None,
+                    error=error_msg,
+                    delivered_at=None,
+                )
+            )
+        return failed
 
     findings: Findings = artifacts["findings"]
     manifest: dict = artifacts["manifest"]

@@ -89,6 +89,10 @@ def run(
 
     from wbsb.pipeline import execute
 
+    # Snapshot existing run directories before the run so we can identify
+    # the new run by set difference rather than guessing by mtime.
+    prior_run_dirs: set[str] = _snapshot_run_dirs(output_dir)
+
     exit_code = execute(
         input_path=input_path,
         output_dir=output_dir,
@@ -99,7 +103,7 @@ def run(
     )
 
     if exit_code == 0 and deliver:
-        _deliver_after_run(output_dir)
+        _try_deliver(output_dir, prior_run_dirs)
 
     raise typer.Exit(exit_code)
 
@@ -187,6 +191,8 @@ def _run_auto(
 
     from wbsb.pipeline import execute
 
+    prior_run_dirs: set[str] = _snapshot_run_dirs(output_dir)
+
     exit_code = execute(
         input_path=candidate,
         output_dir=output_dir,
@@ -197,54 +203,66 @@ def _run_auto(
     )
 
     if exit_code == 0 and deliver:
-        _deliver_after_run(output_dir)
+        _try_deliver(output_dir, prior_run_dirs)
 
     raise typer.Exit(exit_code)
 
 
-def _deliver_after_run(output_dir: Path) -> None:
-    """Dispatch delivery for the most recently created run in output_dir.
+def _snapshot_run_dirs(output_dir: Path) -> set[str]:
+    """Return the set of subdirectory names currently in output_dir."""
+    if not output_dir.exists():
+        return set()
+    try:
+        return {d.name for d in output_dir.iterdir() if d.is_dir()}
+    except OSError:
+        return set()
 
-    Delivery failures are reported but do not affect the run exit code.
+
+def _try_deliver(output_dir: Path, prior_run_dirs: set[str]) -> None:
+    """Find the run just completed by set-difference and deliver it.
+
+    Never raises — all failures are reported to stdout/stderr and swallowed
+    so the run exit code is unaffected.
     """
+    from wbsb.delivery.config import load_delivery_config
     from wbsb.delivery.models import DeliveryStatus
     from wbsb.delivery.orchestrator import deliver_run
 
     delivery_config_path = Path("config/delivery.yaml")
     if not delivery_config_path.exists():
-        typer.echo("Delivery: config/delivery.yaml not found — skipping delivery.", err=True)
+        typer.echo("Delivery: config/delivery.yaml not found — skipping.", err=True)
         return
 
     try:
-        from wbsb.delivery.config import load_delivery_config
-
         delivery_cfg = load_delivery_config(delivery_config_path)
     except Exception as exc:
         typer.echo(f"Delivery: error loading config — {exc}", err=True)
         return
 
-    run_id = _find_latest_run_id(output_dir)
-    if run_id is None:
-        typer.echo("Delivery: could not determine run ID — skipping delivery.", err=True)
+    try:
+        current_dirs = {d.name for d in output_dir.iterdir() if d.is_dir()}
+    except OSError as exc:
+        typer.echo(f"Delivery: cannot read output directory — {exc}", err=True)
         return
 
-    results = deliver_run(run_id, delivery_cfg, output_dir)
+    new_dirs = current_dirs - prior_run_dirs
+    if not new_dirs:
+        typer.echo("Delivery: could not identify the completed run — skipping.", err=True)
+        return
+
+    run_id = next(iter(new_dirs))
+
+    try:
+        results = deliver_run(run_id, delivery_cfg, output_dir)
+    except Exception as exc:
+        typer.echo(f"Delivery: unexpected error — {exc}", err=True)
+        return
+
     for r in results:
         if r.status == DeliveryStatus.success:
             typer.echo(f"✅ {r.target.value}: delivered")
         else:
             typer.echo(f"⚠️  Delivery failed ({r.target.value}): {r.error}")
-
-
-def _find_latest_run_id(output_dir: Path) -> str | None:
-    """Return the name of the most recently modified subdirectory of output_dir."""
-    try:
-        dirs = [d for d in output_dir.iterdir() if d.is_dir()]
-    except OSError:
-        return None
-    if not dirs:
-        return None
-    return max(dirs, key=lambda d: d.stat().st_mtime).name
 
 
 @app.command("deliver")
@@ -268,11 +286,7 @@ def deliver_cmd(
         typer.echo(f"Error loading delivery config: {exc}", err=True)
         raise typer.Exit(1)
 
-    try:
-        results = deliver_run(run_id, delivery_cfg, output_dir)
-    except FileNotFoundError as exc:
-        typer.echo(f"Error: {exc}", err=True)
-        raise typer.Exit(1)
+    results = deliver_run(run_id, delivery_cfg, output_dir)
 
     any_failed = False
     for r in results:
