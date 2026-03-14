@@ -55,10 +55,12 @@ def test_build_card_with_llm() -> None:
     llm_result = LLMResult(situation="Performance softened across revenue this week.")
 
     card = build_teams_card(findings, llm_result, "https://feedback.test")
+    texts = _card_texts(card)
 
     assert card["attachments"][0]["content"]["version"] == "1.4"
-    assert "Weekly Business Signal Brief — 2026-03-09 – 2026-03-15" in _card_texts(card)
-    assert "Performance softened across revenue this week." in _card_texts(card)
+    assert "Weekly Business Signal Brief — 2026-03-09 – 2026-03-15" in texts
+    assert "Run 20260310T090000Z_abc123 | 2026-03-09 to 2026-03-15 | 1 warnings" in texts
+    assert "Performance softened across revenue this week." in texts
 
 
 def test_build_card_llm_fallback() -> None:
@@ -69,6 +71,21 @@ def test_build_card_llm_fallback() -> None:
     assert "⚠️ AI analysis unavailable this week — showing deterministic report" in _card_texts(
         card
     )
+
+
+def test_build_card_llm_fallback_flag_overrides_situation() -> None:
+    findings = _make_findings([])
+    llm_result = LLMResult(
+        situation="This stale situation should not render.",
+        fallback=True,
+        fallback_reason="simulated fallback",
+    )
+
+    card = build_teams_card(findings, llm_result, "https://feedback.test")
+    texts = _card_texts(card)
+
+    assert "⚠️ AI analysis unavailable this week — showing deterministic report" in texts
+    assert "This stale situation should not render." not in texts
 
 
 def test_build_card_warn_signals() -> None:
@@ -127,8 +144,15 @@ def test_build_card_feedback_buttons() -> None:
 
 def test_send_card_success() -> None:
     card = {"hello": "world"}
+    captured: dict[str, object] = {}
 
-    with patch.object(requests, "post", return_value=type("Resp", (), {"status_code": 200})()):
+    def _fake_post(url: str, json: dict, timeout: int):
+        captured["url"] = url
+        captured["json"] = json
+        captured["timeout"] = timeout
+        return type("Resp", (), {"status_code": 200})()
+
+    with patch.object(requests, "post", side_effect=_fake_post):
         result = send_teams_card(card, "https://teams.test")
 
     assert result.target == DeliveryTarget.teams
@@ -136,6 +160,8 @@ def test_send_card_success() -> None:
     assert result.http_status_code == 200
     assert result.error is None
     assert result.delivered_at is not None
+    assert captured["json"] == card
+    assert captured["timeout"] == 10
 
 
 def test_send_card_failure() -> None:
@@ -147,6 +173,7 @@ def test_send_card_failure() -> None:
     assert result.target == DeliveryTarget.teams
     assert result.status == DeliveryStatus.failed
     assert result.http_status_code == 500
+    assert result.error == "Teams webhook returned HTTP 500"
     assert result.delivered_at is None
 
 

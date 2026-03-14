@@ -187,7 +187,7 @@ def send_teams_card(card: dict, webhook_url: str) -> DeliveryResult:
 
 
 def _resolve_situation(llm_result: LLMResult | None) -> str:
-    if llm_result is None or llm_result.situation is None:
+    if llm_result is None or llm_result.fallback or llm_result.situation is None:
         return _FALLBACK_BANNER
 
     situation = llm_result.situation.strip()
