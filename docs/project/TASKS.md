@@ -32,7 +32,7 @@ Full roadmap with all planned iterations: see `project-iterations.md`.
 | I5 | Analytical Reasoning Upgrade | ✅ Complete |
 | **I6** | **Historical Memory & Trend Awareness** | **✅ Complete** |
 | **I7** | **Evaluation Framework & Feedback Loop** | **✅ Complete** |
-| I9 | Deployment & Delivery | 🔲 Planned |
+| **I9** | **Deployment & Delivery** | **✅ Complete** |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned |
 | I10 | Multi-File Data Consolidation | 🔲 Planned |
 
@@ -191,3 +191,64 @@ Full task detail: see `../iterations/i7/tasks.md`.
 - [x] Ruff clean
 - [x] `domain/models.py` unchanged
 - [x] `main` branch stable
+
+---
+
+# Iteration 9 — Deployment & Delivery
+
+## Theme
+Take WBSB from a local CLI tool to a deployed product: push delivery to Teams/Slack, automated scheduling, feedback webhook, Docker packaging, and secrets hardening.
+
+Full task detail: see `../iterations/i9/tasks.md`.
+
+---
+
+## Task Overview
+
+| Task | Owner | Description | Status |
+|------|-------|-------------|--------|
+| I9-0 | Claude | Docs update + package scaffolding | ✅ Done — merged |
+| I9-1 | Codex | Delivery config schema (`config/delivery.yaml`) | ✅ Done — merged |
+| I9-2 | Codex | Teams adaptive card builder + sender | ✅ Done — merged |
+| I9-3 | Codex | Slack block kit builder + sender | ✅ Done — merged |
+| I9-4 | Codex | Scheduler / file watcher (`wbsb run --auto`) | ✅ Done — merged |
+| I9-5 | Claude | Delivery orchestrator (`wbsb deliver`) | ✅ Done — merged |
+| I9-6 | Codex | Failure alerting (LLM fallback + pipeline error) | ✅ Done — merged |
+| I9-7 | Codex | Feedback webhook server (`feedback/server.py`) | ✅ Done — merged |
+| I9-8 | Claude | Docker + `.env.example` + security hardening | ✅ Done — merged |
+| I9-9 | You | Architecture review | ✅ Done — PASS (2 findings fixed) |
+| I9-10 | Claude | Final cleanup + merge to main | ✅ Done — this PR |
+
+---
+
+## Definition of Done — I9
+
+All acceptance criteria met:
+
+- **Delivery layer:** `wbsb deliver --run-id` and `wbsb run --deliver` dispatch to Teams/Slack via config-driven orchestrator; all delivery failures captured as `DeliveryResult` (never raises)
+- **Scheduler:** `wbsb run --auto --watch-dir` discovers and processes the latest unprocessed file; path traversal guard and oversized file guard in place; scheduler boundary enforced (auto mode does not trigger delivery)
+- **Feedback webhook:** `POST /feedback` validates run_id (regex), section, label (allowlists); body capped at 4096 bytes; UUID-only file paths; comment never logged; audit log limited to run_id/section/label
+- **Docker:** image builds cleanly; `.env` excluded from image; runtime directories created; secrets injected at runtime only
+- **CLI:** `wbsb feedback serve`, `wbsb feedback list/summary/export` all operational
+- **Failure alerting:** LLM fallback and pipeline error alerts dispatched via delivery config; no silent failures — all alert dispatch failures emit visible warnings
+- **Security:** no hardcoded secrets; no webhook URLs logged at INFO; no stack traces in HTTP error responses
+- **Tests:** 391 passing (up from 324 baseline); ruff clean; all 6 golden eval cases pass
+- **I9-9 findings resolved:** scheduler delivery boundary enforced; silent `except: pass` replaced with warnings; `RUN_ID_PATTERN` consolidated to single source of truth in `store.py`
+
+---
+
+## Branching Model
+
+```
+main
+ └── feature/iteration-9                   ← integration branch
+      ├── feature/i9-0-pre-work            ← docs + scaffolding (PR #44 — in progress)
+      ├── feature/i9-1-delivery-config     ← delivery config schema
+      ├── feature/i9-2-teams-adapter       ← Teams card builder
+      ├── feature/i9-3-slack-adapter       ← Slack block builder
+      ├── feature/i9-4-scheduler           ← file watcher + auto-run
+      ├── feature/i9-5-delivery-orchestrator ← wbsb deliver command
+      ├── feature/i9-6-failure-alerting    ← alerting banners
+      ├── feature/i9-7-feedback-webhook    ← feedback HTTP endpoint
+      └── feature/i9-8-docker             ← Docker + security
+```

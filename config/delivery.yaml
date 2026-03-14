@@ -1,0 +1,19 @@
+delivery:
+  teams:
+    enabled: false
+    webhook_url: "${TEAMS_WEBHOOK_URL}"
+  slack:
+    enabled: false
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+
+scheduler:
+  trigger: "manual"
+  cron: "0 8 * * 1"
+  watch_directory: "data/incoming"
+  filename_pattern: "weekly_data_*.csv"
+  llm_mode: "off"
+
+alerts:
+  on_llm_fallback: true
+  on_pipeline_error: true
+  on_no_new_file: true
