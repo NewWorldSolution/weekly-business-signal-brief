@@ -256,6 +256,25 @@ wbsb run -i your_data.csv --week 2024-W48
 
 The specified week becomes the "current week" and the week before it becomes the "prior week".
 
+### Evaluation and Feedback Commands (I7)
+
+```bash
+# Run the golden evaluation dataset (all cases must pass)
+wbsb eval
+
+# Run a single golden case
+wbsb eval --case clean_week
+
+# List recent operator feedback entries
+wbsb feedback list
+
+# Score breakdown: % expected / unexpected / incorrect
+wbsb feedback summary
+
+# Export feedback for a specific run
+wbsb feedback export --run-id <run_id>
+```
+
 ### Changing the AI Model
 Without code changes, override the model via environment variable:
 

@@ -160,7 +160,7 @@ Move the LLM from per-signal summarization to structured, section-based analysis
 | Sonnet 4.5 | ✅ Always valid | High — specific figures, relationships | ~$0.023 | **Recommended default** |
 | Opus 4.5 | ✅ Always valid | Highest — paradox detection, severity framing | ~$0.089 | Use for complex multi-signal weeks |
 
-**Final state:** 217 tests passing, ruff clean, all I5 branches merged to main.
+**Final state at I5:** ruff clean, all I5 branches merged to main. Baseline grew to 324 tests by end of I7.
 
 ### Key Files
 `src/wbsb/render/template.py`, `src/wbsb/render/template.md.j2`, `src/wbsb/render/llm.py`, `src/wbsb/domain/models.py`, `tests/test_render_template.py`
@@ -389,9 +389,6 @@ tests/test_delivery.py             ← new: card/block rendering tests (no live 
 
 ### Goal
 Close the quality loop. By this point the system is live and delivering reports to real operators. Iteration 7 introduces two mechanisms: automated scoring that runs on every LLM output, and a structured feedback system that lets operators flag what's right, surprising, or wrong. Together, these create a compounding improvement cycle.
-
-### Why This Comes After I9
-The feedback loop is only useful once real operators are reading real reports. The golden dataset for automated evaluation is built faster from real production runs (which start in I9) than from synthetic test cases. Starting I7 before I9 would mean evaluating against simulated scenarios; starting after means evaluating against reality.
 
 ### What to Build
 

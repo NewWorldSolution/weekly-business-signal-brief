@@ -1,16 +1,16 @@
 from __future__ import annotations
 
-from enum import StrEnum
+from enum import Enum
 
 from pydantic import BaseModel
 
 
-class DeliveryTarget(StrEnum):
+class DeliveryTarget(str, Enum):  # noqa: UP042
     teams = "teams"
     slack = "slack"
 
 
-class DeliveryStatus(StrEnum):
+class DeliveryStatus(str, Enum):  # noqa: UP042
     success = "success"
     skipped = "skipped"
     failed = "failed"
