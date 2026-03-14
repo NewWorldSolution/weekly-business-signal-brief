@@ -1,0 +1,10 @@
+.env
+.env.*
+runs/
+feedback/
+data/
+*.pyc
+__pycache__/
+.git/
+tests/
+docs/
