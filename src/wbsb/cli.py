@@ -93,14 +93,19 @@ def run(
     # the new run by set difference rather than guessing by mtime.
     prior_run_dirs: set[str] = _snapshot_run_dirs(output_dir)
 
-    exit_code = execute(
-        input_path=input_path,
-        output_dir=output_dir,
-        llm_mode=llm_mode,
-        llm_provider=llm_provider,
-        config_path=config_path,
-        target_week=week,
-    )
+    try:
+        exit_code = execute(
+            input_path=input_path,
+            output_dir=output_dir,
+            llm_mode=llm_mode,
+            llm_provider=llm_provider,
+            config_path=config_path,
+            target_week=week,
+        )
+    except Exception as exc:
+        typer.echo(f"⚠️  Pipeline error: {exc}", err=True)
+        _try_send_pipeline_error_alert(str(exc), run_id=None)
+        raise typer.Exit(1)
 
     if exit_code == 0 and deliver:
         _try_deliver(output_dir, prior_run_dirs)
@@ -180,7 +185,8 @@ def _run_auto(
         return
 
     if candidate is None:
-        typer.echo("Auto-run: no processable input file found. Skipping.")
+        typer.echo("⚠️  Auto-run: no new data file found. Skipping.")
+        _try_send_no_file_alert(str(watch_dir))
         return
 
     if already_processed(candidate, index_path):
@@ -193,14 +199,19 @@ def _run_auto(
 
     prior_run_dirs: set[str] = _snapshot_run_dirs(output_dir)
 
-    exit_code = execute(
-        input_path=candidate,
-        output_dir=output_dir,
-        llm_mode=llm_mode,
-        llm_provider=llm_provider,
-        config_path=config_path,
-        target_week=None,
-    )
+    try:
+        exit_code = execute(
+            input_path=candidate,
+            output_dir=output_dir,
+            llm_mode=llm_mode,
+            llm_provider=llm_provider,
+            config_path=config_path,
+            target_week=None,
+        )
+    except Exception as exc:
+        typer.echo(f"⚠️  Pipeline error: {exc}", err=True)
+        _try_send_pipeline_error_alert(str(exc), run_id=None)
+        raise typer.Exit(1)
 
     if exit_code == 0 and deliver:
         _try_deliver(output_dir, prior_run_dirs)
@@ -252,6 +263,19 @@ def _try_deliver(output_dir: Path, prior_run_dirs: set[str]) -> None:
 
     run_id = next(iter(new_dirs))
 
+    # Alert 1 — LLM fallback: print visible warning when AI analysis was unavailable.
+    import json
+
+    manifest_path = output_dir / run_id / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if manifest.get("llm_status") in ("fallback", "error"):
+            typer.echo(
+                "⚠️  LLM fallback: AI analysis unavailable — report delivered with fallback banner."
+            )
+    except Exception:  # noqa: BLE001
+        pass  # manifest unreadable; non-fatal
+
     try:
         results = deliver_run(run_id, delivery_cfg, output_dir)
     except Exception as exc:
@@ -263,6 +287,42 @@ def _try_deliver(output_dir: Path, prior_run_dirs: set[str]) -> None:
             typer.echo(f"✅ {r.target.value}: delivered")
         else:
             typer.echo(f"⚠️  Delivery failed ({r.target.value}): {r.error}")
+
+
+def _try_send_pipeline_error_alert(error: str, run_id: str | None) -> None:
+    """Load delivery config and dispatch a pipeline error alert. Never raises."""
+    from wbsb.delivery.alerts import build_pipeline_error_alert, send_alert
+    from wbsb.delivery.config import load_delivery_config
+
+    delivery_config_path = Path("config/delivery.yaml")
+    if not delivery_config_path.exists():
+        return
+    try:
+        delivery_cfg = load_delivery_config(delivery_config_path)
+        if not delivery_cfg.get("alerts", {}).get("on_pipeline_error", False):
+            return
+        alert = build_pipeline_error_alert(error, run_id)
+        send_alert(alert, delivery_cfg)
+    except Exception:  # noqa: BLE001
+        pass  # alert dispatch is best-effort; never crash the CLI
+
+
+def _try_send_no_file_alert(watch_directory: str) -> None:
+    """Load delivery config and dispatch a no-new-file alert. Never raises."""
+    from wbsb.delivery.alerts import build_no_file_alert, send_alert
+    from wbsb.delivery.config import load_delivery_config
+
+    delivery_config_path = Path("config/delivery.yaml")
+    if not delivery_config_path.exists():
+        return
+    try:
+        delivery_cfg = load_delivery_config(delivery_config_path)
+        if not delivery_cfg.get("alerts", {}).get("on_no_new_file", False):
+            return
+        alert = build_no_file_alert(watch_directory)
+        send_alert(alert, delivery_cfg)
+    except Exception:  # noqa: BLE001
+        pass  # alert dispatch is best-effort; never crash the CLI
 
 
 @app.command("deliver")
