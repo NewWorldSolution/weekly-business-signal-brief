@@ -16,8 +16,8 @@
 | I4 | LLM Integration | ✅ Complete | ✅ |
 | I5 | Analytical Reasoning Upgrade | ✅ Complete | ✅ |
 | I6 | Historical Memory & Trend Awareness | ✅ Complete | ✅ |
-| I9 | Deployment & Delivery | 🔲 Planned | ✅ |
 | I7 | Evaluation Framework & Feedback Loop | ✅ Complete | ✅ |
+| I9 | Deployment & Delivery | 🔲 In Progress | ✅ |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned | — |
 | I10 | Multi-File Data Consolidation | 🔲 Planned | — |
 
@@ -160,7 +160,7 @@ Move the LLM from per-signal summarization to structured, section-based analysis
 | Sonnet 4.5 | ✅ Always valid | High — specific figures, relationships | ~$0.023 | **Recommended default** |
 | Opus 4.5 | ✅ Always valid | Highest — paradox detection, severity framing | ~$0.089 | Use for complex multi-signal weeks |
 
-**Final state:** 217 tests passing, ruff clean, all I5 branches merged to main.
+**Final state at I5:** ruff clean, all I5 branches merged to main. Baseline grew to 324 tests by end of I7.
 
 ### Key Files
 `src/wbsb/render/template.py`, `src/wbsb/render/template.md.j2`, `src/wbsb/render/llm.py`, `src/wbsb/domain/models.py`, `tests/test_render_template.py`
@@ -174,7 +174,7 @@ Move the LLM from per-signal summarization to structured, section-based analysis
 ---
 
 ## Iteration 6 — Historical Memory & Trend Awareness
-**Status:** 🔲 Planned | **MVP:** ✅ Required
+**Status:** ✅ Complete | **MVP:** ✅ Required
 
 ### Goal
 Give the system memory across weeks. Today every report is stateless — the LLM sees only this week vs last week. With historical context, the system can detect trajectories ("CAC has risen for 3 consecutive weeks, now up 47% from 4 weeks ago") and the LLM can reason about whether a metric is recovering, compounding, or stable.
@@ -284,7 +284,7 @@ tests/test_llm_adapter.py          ← extend for trend context in prompt
 ---
 
 ## Iteration 9 — Deployment & Delivery
-**Status:** 🔲 Planned | **MVP:** ✅ Required
+**Status:** 🔲 In Progress | **MVP:** ✅ Required
 
 ### Goal
 Get the system running automatically on a server and delivering reports to where the operator already is. This is what makes WBSB a product rather than a local script.
@@ -389,9 +389,6 @@ tests/test_delivery.py             ← new: card/block rendering tests (no live 
 
 ### Goal
 Close the quality loop. By this point the system is live and delivering reports to real operators. Iteration 7 introduces two mechanisms: automated scoring that runs on every LLM output, and a structured feedback system that lets operators flag what's right, surprising, or wrong. Together, these create a compounding improvement cycle.
-
-### Why This Comes After I9
-The feedback loop is only useful once real operators are reading real reports. The golden dataset for automated evaluation is built faster from real production runs (which start in I9) than from synthetic test cases. Starting I7 before I9 would mean evaluating against simulated scenarios; starting after means evaluating against reality.
 
 ### What to Build
 
@@ -709,12 +706,12 @@ MVP is complete when all of the following are true:
 - [ ] `wbsb eval` passes all golden cases (I7)
 
 **Ongoing**
-- [ ] All tests passing (217 baseline + new per iteration)
+- [ ] All tests passing (324 baseline + new per iteration)
 - [ ] Ruff clean
 - [ ] Docker image builds and runs end-to-end
 
 ---
 
 *Document created: 2026-03-09*
-*Reflects state after Iteration 5 completion.*
+*Updated: 2026-03-14 — reflects state after Iteration 7 completion and Iteration 9 start.*
 *Update this document at the start of each iteration with actual deliverables and any scope changes.*

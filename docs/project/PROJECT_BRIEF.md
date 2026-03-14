@@ -247,21 +247,15 @@ The underlying analytics engine and AI contract remain identical across all deli
 
 ## The Road Ahead
 
-The system is currently at the end of its foundation phase (Iteration 5 of 10). The core analytical engine, LLM contract, and report architecture are production-ready. The path to a fully deployed, commercially viable product spans five further iterations:
+The system has completed its foundation phase (Iterations 1–7). The core analytical engine, LLM contract, historical memory, and quality evaluation layers are production-ready. The active phase is deployment and delivery:
 
-**Iteration 6 — Historical Memory**
-The system gains multi-week awareness. Instead of comparing only this week to last week, it tracks trajectories: "CAC has been rising for three consecutive weeks and is now 47% above its four-week average." Context transforms signal detection into trend analysis.
+**Iteration 9 — Deployment and Delivery** *(in progress)*
+The system moves from a local tool to a live service. Scheduled execution, file watching, and push delivery to Teams or Slack. The operator uploads their weekly data file and the brief arrives in their channel automatically. Includes the feedback webhook server deferred from I7.
 
-**Iteration 9 — Deployment and Delivery**
-The system moves from a local tool to a live service. Scheduled execution, file watching, and push delivery to Teams or Slack. The operator uploads their weekly data file and the brief arrives in their channel automatically.
-
-**Iteration 7 — Evaluation and Feedback Loop**
-Automated quality scoring on every AI output (grounding accuracy, signal coverage, hallucination risk) combined with an operator feedback mechanism — operators can label any section as Expected, Unexpected, or Incorrect directly from the delivery card. This creates a continuous improvement loop grounded in real operator experience.
-
-**Iteration 8 — Dashboard and Visual Reporting**
+**Iteration 8 — Dashboard and Visual Reporting** *(planned)*
 A web-based report viewer with trend charts, run history, metric sparklines, and integrated operator feedback. The system evolves from a report to a product.
 
-**Iteration 10 — Multi-Source Data Consolidation**
+**Iteration 10 — Multi-Source Data Consolidation** *(planned)*
 Accept multiple input files from different source systems (bookings platform, POS, ad platform, CRM) and automatically consolidate them into the format the engine requires. This removes the last manual step: the operator uploads what they have, not what the system expects.
 
 **Long-term vision:**
@@ -289,6 +283,6 @@ This system answers it.
 
 ---
 
-*Weekly Business Signal Brief — Iteration 5 Complete*
-*Foundation phase: production-ready analytics engine, validated LLM contract, structured report architecture.*
-*Next phase: historical memory, automated delivery, operator feedback loop.*
+*Weekly Business Signal Brief — Iteration 7 Complete*
+*Foundation phases complete: analytics engine, LLM contract, historical memory, evaluation framework, operator feedback loop.*
+*Active: Iteration 9 — automated delivery (Teams/Slack), scheduler, feedback webhook, Docker packaging.*

@@ -32,7 +32,7 @@ Full roadmap with all planned iterations: see `project-iterations.md`.
 | I5 | Analytical Reasoning Upgrade | ✅ Complete |
 | **I6** | **Historical Memory & Trend Awareness** | **✅ Complete** |
 | **I7** | **Evaluation Framework & Feedback Loop** | **✅ Complete** |
-| I9 | Deployment & Delivery | 🔲 Planned |
+| **I9** | **Deployment & Delivery** | **🔲 In Progress** |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned |
 | I10 | Multi-File Data Consolidation | 🔲 Planned |
 
@@ -191,3 +191,48 @@ Full task detail: see `../iterations/i7/tasks.md`.
 - [x] Ruff clean
 - [x] `domain/models.py` unchanged
 - [x] `main` branch stable
+
+---
+
+# Iteration 9 — Deployment & Delivery
+
+## Theme
+Take WBSB from a local CLI tool to a deployed product: push delivery to Teams/Slack, automated scheduling, feedback webhook, Docker packaging, and secrets hardening.
+
+Full task detail: see `../iterations/i9/tasks.md`.
+
+---
+
+## Task Overview
+
+| Task | Owner | Description | Status |
+|------|-------|-------------|--------|
+| I9-0 | Claude | Docs update + package scaffolding | 🔲 In Progress |
+| I9-1 | Codex | Delivery config schema (`config/delivery.yaml`) | 🔲 Pending I9-0 merge |
+| I9-2 | Codex | Teams adaptive card builder + sender | 🔲 Pending I9-1 merge |
+| I9-3 | Codex | Slack block kit builder + sender | 🔲 Pending I9-1 merge |
+| I9-4 | Codex | Scheduler / file watcher (`wbsb run --auto`) | 🔲 Pending I9-0 merge |
+| I9-5 | Claude | Delivery orchestrator (`wbsb deliver`) | 🔲 Pending I9-2 + I9-3 merge |
+| I9-6 | Codex | Failure alerting (LLM fallback + pipeline error) | 🔲 Pending I9-5 merge |
+| I9-7 | Codex | Feedback webhook server (`feedback/server.py`) | 🔲 Pending I9-5 merge |
+| I9-8 | Claude | Docker + `.env.example` + security hardening | 🔲 Pending I9-5 merge |
+| I9-9 | You | Architecture review | 🔲 Pending all tasks done |
+| I9-10 | Claude | Final cleanup + merge to main | 🔲 Pending I9-9 pass |
+
+---
+
+## Branching Model
+
+```
+main
+ └── feature/iteration-9                   ← integration branch
+      ├── feature/i9-0-pre-work            ← docs + scaffolding (PR #44 — in progress)
+      ├── feature/i9-1-delivery-config     ← delivery config schema
+      ├── feature/i9-2-teams-adapter       ← Teams card builder
+      ├── feature/i9-3-slack-adapter       ← Slack block builder
+      ├── feature/i9-4-scheduler           ← file watcher + auto-run
+      ├── feature/i9-5-delivery-orchestrator ← wbsb deliver command
+      ├── feature/i9-6-failure-alerting    ← alerting banners
+      ├── feature/i9-7-feedback-webhook    ← feedback HTTP endpoint
+      └── feature/i9-8-docker             ← Docker + security
+```
