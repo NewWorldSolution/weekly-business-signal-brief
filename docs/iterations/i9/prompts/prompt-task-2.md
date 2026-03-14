@@ -18,6 +18,7 @@ This task builds Teams card rendering + sender wrapper.
 | 3 | No live webhook calls in tests. |
 | 4 | Keep pipeline untouched. |
 | 5 | Open draft PR first. |
+| 6 | Webhook URL is a credential: read from config (which resolves from env only); never log at any level (info, debug, warning); do not include in test output or error messages. |
 
 ---
 
@@ -40,6 +41,20 @@ gh pr create \
 pytest --tb=short -q
 ruff check .
 ```
+
+---
+
+## Inputs and Outputs
+
+### Inputs
+- `docs/iterations/i9/tasks.md` (I9-2 section — card contract)
+- `src/wbsb/delivery/models.py` (read only — `DeliveryResult`, `DeliveryTarget`)
+- `src/wbsb/domain/models.py` (read only — `Findings`, `Signal`, `LLMResult`)
+- Webhook URL provided by caller at runtime (never hardcoded)
+
+### Outputs
+- `src/wbsb/delivery/teams.py` — `build_teams_card()`, `send_teams_card()`
+- `tests/test_delivery_teams.py` — card/sender unit tests (no live HTTP)
 
 ---
 

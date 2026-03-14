@@ -53,6 +53,21 @@ Implement exactly the I9-8 contract from tasks.md:
 
 ---
 
+## Inputs and Outputs
+
+### Inputs
+- `docs/iterations/i9/tasks.md` (I9-8 section — container spec + security checklist)
+- `src/` (read only — source to be containerized; must not be modified)
+- `.env.example` (read only — documents required runtime env vars)
+
+### Outputs
+- `Dockerfile` — single-stage build from `python:3.11-slim`
+- `docker-compose.yml` — env injection via `env_file`, volume mounts, run command
+- `.dockerignore` — excludes `.env`, `tests/`, `docs/`, `runs/`, `feedback/`, etc.
+- Security checklist results (documented in PR description)
+
+---
+
 ## Allowed Files
 
 ```text

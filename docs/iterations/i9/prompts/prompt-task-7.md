@@ -55,6 +55,21 @@ Implement I9-7 exactly as defined in tasks.md:
 
 ---
 
+## Inputs and Outputs
+
+### Inputs
+- `docs/iterations/i9/tasks.md` (I9-7 section — full webhook contract)
+- `src/wbsb/feedback/store.py` (read only — `save_feedback()`)
+- `src/wbsb/feedback/models.py` (read only — `FeedbackEntry`)
+- `feedback/` directory (runtime write target — UUID-named JSON files)
+
+### Outputs
+- `src/wbsb/feedback/server.py` — `FeedbackHandler` (stdlib `http.server`), validation constants
+- `src/wbsb/cli.py` — `wbsb feedback serve --host --port` command
+- `tests/test_feedback_server.py` — webhook server unit tests
+
+---
+
 ## Allowed Files
 
 ```text

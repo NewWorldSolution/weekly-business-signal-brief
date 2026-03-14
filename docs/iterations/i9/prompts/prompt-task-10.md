@@ -53,6 +53,20 @@ Execute final cleanup exactly per tasks.md:
 
 ---
 
+## Inputs and Outputs
+
+### Inputs
+- I9-9 review output (list of findings with severity and fix evidence)
+- `docs/project/TASKS.md` (current I9 status)
+- `docs/project/project-iterations.md` (iteration status)
+
+### Outputs
+- `docs/project/TASKS.md` — I9 marked Complete with Definition of Done
+- `docs/project/project-iterations.md` — I9 status updated to Complete
+- Source/test fixes (only if required by I9-9 findings; must be traceable to specific finding)
+
+---
+
 ## Allowed Files
 
 ```text

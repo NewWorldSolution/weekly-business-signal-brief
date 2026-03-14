@@ -55,6 +55,21 @@ Implement I9-5 from `docs/iterations/i9/tasks.md`:
 
 ---
 
+## Inputs and Outputs
+
+### Inputs
+- `docs/iterations/i9/tasks.md` (I9-5 section)
+- `src/wbsb/delivery/teams.py`, `src/wbsb/delivery/slack.py` (read only — send functions)
+- `src/wbsb/delivery/config.py` (read only — enabled flags, URL resolution)
+- `runs/{run_id}/` directory (runtime read — `findings.json`, `manifest.json`, `llm_response.json`)
+
+### Outputs
+- `src/wbsb/delivery/orchestrator.py` — `load_run_artifacts()`, `deliver_run()`
+- `src/wbsb/cli.py` — `wbsb deliver --run-id`, `wbsb run --deliver` flag
+- `tests/test_delivery_orchestrator.py` — orchestrator unit tests
+
+---
+
 ## Allowed Files
 
 ```text

@@ -21,6 +21,8 @@ This task adds scheduler decision logic and CLI auto-run support.
 | 4 | Enforce path traversal guard in file discovery. |
 | 5 | `src/wbsb/pipeline.py` must not be modified. |
 | 6 | Open draft PR first (Step 0). |
+| 7 | I9-4 exits after the pipeline run completes. Post-run delivery to Teams/Slack is NOT part of this task — it is wired in I9-5 via `wbsb deliver` or `wbsb run --deliver`. |
+| 8 | Reject files that exceed a safe size threshold before passing to the pipeline. If a matched file is unexpectedly large, log a warning and treat the run as skipped (same as "no processable file found"), to prevent resource exhaustion from corrupt or accidental oversized inputs. |
 
 ---
 
@@ -55,6 +57,21 @@ Implement I9-4 exactly as defined in `docs/iterations/i9/tasks.md`:
 
 ---
 
+## Inputs and Outputs
+
+### Inputs
+- `docs/iterations/i9/tasks.md` (I9-4 section)
+- `src/wbsb/history/store.py` (read only — for `derive_dataset_key`, `HistoryReader`)
+- `config/delivery.yaml` (read only — for watch_directory, filename_pattern, scheduler config)
+- `runs/index.json` (runtime read — for already-processed check)
+
+### Outputs
+- `src/wbsb/scheduler/auto.py` — scheduler module with `find_latest_input`, `already_processed`
+- `src/wbsb/cli.py` — extended with `--auto` flag on `wbsb run`
+- `tests/test_scheduler.py` — scheduler unit tests
+
+---
+
 ## Allowed Files
 
 ```text
@@ -86,20 +103,26 @@ At minimum include:
 ## Execution Workflow
 
 1. Read I9-4 section in `docs/iterations/i9/tasks.md` fully.
-2. Implement scheduler module with path traversal guard:
+2. Implement scheduler module with path traversal guard and file size check:
 
 ```python
 resolved = file.resolve()
 watch_resolved = watch_dir.resolve()
 if not str(resolved).startswith(str(watch_resolved)):
     raise ValueError(...)
+# Reject files over a safe threshold (e.g. 100 MB) with logged warning
+MAX_INPUT_BYTES = 100 * 1024 * 1024
+if resolved.stat().st_size > MAX_INPUT_BYTES:
+    log.warning("input_file_too_large", path=str(resolved), size=resolved.stat().st_size)
+    return None
 ```
 
 3. Extend `wbsb run` CLI with `--auto` behavior:
    - load scheduler config
-   - no new file -> INFO and exit 0
+   - no new file (including oversized file rejection) -> INFO and exit 0
    - already processed -> INFO and exit 0
    - else run normal pipeline path
+   - **do not trigger delivery** — I9-4 exits after pipeline run; delivery is handled by I9-5
 4. Add required tests from tasks.md in `tests/test_scheduler.py`.
 5. Run:
 
@@ -123,6 +146,7 @@ Include all tests listed in tasks.md:
 - `test_find_latest_input_no_match`
 - `test_find_latest_input_empty_dir`
 - `test_find_latest_input_path_traversal`
+- `test_find_latest_input_oversized_file_skipped`
 - `test_already_processed_true`
 - `test_already_processed_false_new_file`
 - `test_already_processed_index_absent`
@@ -135,7 +159,9 @@ No live cron/daemon tests.
 
 - Scheduler module API implemented.
 - Path traversal guard present and tested.
+- Oversized file rejection present and tested (`test_find_latest_input_oversized_file_skipped`).
 - `--auto` run mode works as specified.
+- `--auto` exits after pipeline run — delivery is NOT triggered in I9-4.
 - Already-processed logic uses I6 index and dataset scoping.
 - `pipeline.py` unchanged.
 - Tests and ruff clean.
@@ -147,7 +173,9 @@ No live cron/daemon tests.
 - [ ] Draft PR created before edits
 - [ ] Only allowed files changed
 - [ ] Scheduler API implemented
-- [ ] `--auto` integrated in CLI
+- [ ] Path traversal guard implemented and tested
+- [ ] Oversized file guard implemented and tested
+- [ ] `--auto` integrated in CLI (delivery NOT triggered)
 - [ ] Required tests added and meaningful
 - [ ] `pytest` passes
 - [ ] `ruff check .` passes

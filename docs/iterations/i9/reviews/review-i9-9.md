@@ -70,24 +70,28 @@ grep -n "send_teams\|send_slack\|deliver_run\|webhook" src/wbsb/scheduler/*.py
 
 Expected: no direct channel delivery calls in scheduler.
 
-### Step 6 — Path traversal and safe file checks
+### Step 6 — Path traversal, file size guard, and safe file checks
 
 ```bash
-grep -n "resolve\|Path outside watch directory\|startswith" src/wbsb/scheduler/*.py
+grep -n "resolve\|Path outside watch directory\|startswith\|MAX_INPUT_BYTES\|st_size\|too_large\|oversized" src/wbsb/scheduler/auto.py
 grep -n "uuid\|feedback/\|run_id" src/wbsb/feedback/server.py
 ```
 
-Verify traversal guard and input-independent feedback file paths.
+Verify:
+- traversal guard in scheduler (`resolved.startswith(watch_resolved)` or equivalent)
+- oversized file guard in scheduler (files exceeding safe threshold skipped with warning, not passed to pipeline)
+- input-independent feedback file paths (UUID only)
 
 ### Step 7 — Security checks (secrets/logging)
 
 ```bash
 grep -rn "ANTHROPIC_API_KEY\s*=" src/ config/
-grep -rn "TEAMS_WEBHOOK_URL\|SLACK_WEBHOOK_URL" src/ config/
-grep -rn "webhook_url" src/wbsb | grep "log.info"
+grep -rn "TEAMS_WEBHOOK_URL\s*=\s*[\"'][^$]" src/ config/
+grep -rn "SLACK_WEBHOOK_URL\s*=\s*[\"'][^$]" src/ config/
+grep -rn "webhook_url" src/wbsb/ | grep -v "log\.error\|log\.debug\|#\|\.yaml\|test_"
 ```
 
-Expected: env-based reads only, no secret values in code, no webhook URL info logs.
+Expected: env-based reads only, no hardcoded secret values, no webhook URL appearing in info/warning/print-level output.
 
 ### Step 8 — Docker/security hardening checks
 
@@ -176,13 +180,16 @@ Review for unexpected modules outside I9 scope.
 
 - [ ] Pipeline has no delivery coupling
 - [ ] Scheduler has no direct Teams/Slack delivery calls
+- [ ] Scheduler path traversal guard implemented and tested
+- [ ] Scheduler oversized file guard implemented and tested
+- [ ] `--auto` mode does NOT trigger delivery (delivery is I9-5 responsibility)
 - [ ] Orchestrator reads artifacts and dispatches safely
 - [ ] `wbsb deliver --run-id` path available
 - [ ] `--auto` scheduler mode available in CLI
 - [ ] Feedback webhook validates run_id/section/label
 - [ ] Feedback path handling is safe (no user-derived file paths)
-- [ ] No secret hardcoding
-- [ ] No webhook URL logging at INFO
+- [ ] No secret hardcoding anywhere in source or config
+- [ ] No webhook URL logging at info, warning, or debug level
 - [ ] Docker image builds and excludes `.env`
 - [ ] End-to-end run with `--deliver` does not crash
 - [ ] `wbsb eval` still passes

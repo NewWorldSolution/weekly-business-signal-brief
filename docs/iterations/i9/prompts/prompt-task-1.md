@@ -43,6 +43,19 @@ ruff check .
 
 ---
 
+## Inputs and Outputs
+
+### Inputs
+- `docs/iterations/i9/tasks.md` (I9-1 section — frozen delivery config schema)
+- `.env.example` (read only — env var names to document in YAML placeholders)
+
+### Outputs
+- `config/delivery.yaml` — delivery config with env-placeholder webhook URLs
+- `src/wbsb/delivery/config.py` — loader, resolver, and enabled-flag helpers
+- `tests/test_delivery_config.py` — config unit tests
+
+---
+
 ## Allowed Files
 
 ```text

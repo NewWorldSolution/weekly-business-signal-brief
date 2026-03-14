@@ -52,14 +52,32 @@ Implement I9-6 from tasks.md with three alert payload paths:
 
 ---
 
+## Inputs and Outputs
+
+### Inputs
+- `docs/iterations/i9/tasks.md` (I9-6 section)
+- `src/wbsb/delivery/models.py` (read only — `DeliveryResult`, `DeliveryTarget`)
+- `src/wbsb/delivery/orchestrator.py` (read only — for send patterns)
+- `config/delivery.yaml` (runtime read — alert enable flags)
+
+### Outputs
+- `src/wbsb/delivery/alerts.py` — alert payload builders + `send_alert` dispatcher
+- `src/wbsb/scheduler/watcher.py` — no-new-file detection helper (alerting path only)
+- `src/wbsb/cli.py` — extended with alert dispatch on failure paths
+- `tests/test_delivery_alerts.py` — alert unit tests
+
+---
+
 ## Allowed Files
 
 ```text
 src/wbsb/delivery/alerts.py
-src/wbsb/scheduler/watcher.py
+src/wbsb/scheduler/watcher.py   ← NEW file for alerting only; distinct from auto.py (I9-4)
 src/wbsb/cli.py
 tests/test_delivery_alerts.py
 ```
+
+**Note on scheduler files:** `src/wbsb/scheduler/auto.py` was created in I9-4 and is the canonical file discovery module. Do **not** modify it. `watcher.py` is a new, separate helper introduced in I9-6 for the no-new-file alert path only. The two files serve distinct purposes and both may exist in the scheduler package.
 
 ## Forbidden Files
 
