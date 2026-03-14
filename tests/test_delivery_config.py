@@ -1,9 +1,14 @@
 """Tests for wbsb.delivery.config."""
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
+
+# Ensure the package is importable in a fresh worktree checkout even when
+# editable install metadata still points at a different sibling worktree.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from wbsb.delivery.config import (
     load_delivery_config,
