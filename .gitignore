@@ -211,4 +211,4 @@ runs/*
 
 Prompt.md
 feedback/*
-!feedback/.gitkeep
+!feedback/.gitkeep.DS_Store
