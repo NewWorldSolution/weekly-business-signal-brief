@@ -1,7 +1,7 @@
 # WBSB — Project Iterations
 ## Weekly Business Signal Brief — Full Roadmap
 
-**MVP Definition:** Iterations I1–I7 + I9 complete.
+**MVP Definition:** Iterations I1–I7 + I9 complete. **MVP is now complete.**
 **Post-MVP:** I8 (dashboard polish), I10 (multi-file data consolidation), I11 (security hardening).
 
 ---
@@ -17,7 +17,7 @@
 | I5 | Analytical Reasoning Upgrade | ✅ Complete | ✅ |
 | I6 | Historical Memory & Trend Awareness | ✅ Complete | ✅ |
 | I7 | Evaluation Framework & Feedback Loop | ✅ Complete | ✅ |
-| I9 | Deployment & Delivery | 🔲 In Progress | ✅ |
+| I9 | Deployment & Delivery | ✅ Complete | ✅ |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned | — |
 | I10 | Multi-File Data Consolidation | 🔲 Planned | — |
 | I11 | Security Hardening & Production Readiness | 🔲 Planned | — |
@@ -285,7 +285,7 @@ tests/test_llm_adapter.py          ← extend for trend context in prompt
 ---
 
 ## Iteration 9 — Deployment & Delivery
-**Status:** 🔲 In Progress | **MVP:** ✅ Required
+**Status:** ✅ Complete | **MVP:** ✅ Required
 
 ### Goal
 Get the system running automatically on a server and delivering reports to where the operator already is. This is what makes WBSB a product rather than a local script.
@@ -978,5 +978,5 @@ MVP is complete when all of the following are true:
 ---
 
 *Document created: 2026-03-09*
-*Updated: 2026-03-14 — reflects state after Iteration 7 completion and Iteration 9 start.*
+*Updated: 2026-03-14 — reflects state after Iteration 9 completion. MVP (I1–I7 + I9) is complete.*
 *Update this document at the start of each iteration with actual deliverables and any scope changes.*
