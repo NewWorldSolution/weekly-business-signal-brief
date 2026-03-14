@@ -104,7 +104,7 @@ def run(
         )
     except Exception as exc:
         typer.echo(f"⚠️  Pipeline error: {exc}", err=True)
-        _try_send_pipeline_error_alert(str(exc), run_id=None)
+        _try_send_pipeline_error_alert(str(exc), run_id=_recover_run_id(output_dir, prior_run_dirs))
         raise typer.Exit(1)
 
     if exit_code == 0 and deliver:
@@ -210,13 +210,23 @@ def _run_auto(
         )
     except Exception as exc:
         typer.echo(f"⚠️  Pipeline error: {exc}", err=True)
-        _try_send_pipeline_error_alert(str(exc), run_id=None)
+        _try_send_pipeline_error_alert(str(exc), run_id=_recover_run_id(output_dir, prior_run_dirs))
         raise typer.Exit(1)
 
     if exit_code == 0 and deliver:
         _try_deliver(output_dir, prior_run_dirs)
 
     raise typer.Exit(exit_code)
+
+
+def _recover_run_id(output_dir: Path, prior_run_dirs: set[str]) -> str | None:
+    """Return the run_id of a directory created since prior_run_dirs was snapshotted, if any."""
+    try:
+        current = {d.name for d in output_dir.iterdir() if d.is_dir()}
+        new_dirs = current - prior_run_dirs
+        return next(iter(new_dirs)) if new_dirs else None
+    except OSError:
+        return None
 
 
 def _snapshot_run_dirs(output_dir: Path) -> set[str]:
@@ -263,7 +273,7 @@ def _try_deliver(output_dir: Path, prior_run_dirs: set[str]) -> None:
 
     run_id = next(iter(new_dirs))
 
-    # Alert 1 — LLM fallback: print visible warning when AI analysis was unavailable.
+    # Alert 1 — LLM fallback: warn and dispatch alert when AI analysis was unavailable.
     import json
 
     manifest_path = output_dir / run_id / "manifest.json"
@@ -273,6 +283,13 @@ def _try_deliver(output_dir: Path, prior_run_dirs: set[str]) -> None:
             typer.echo(
                 "⚠️  LLM fallback: AI analysis unavailable — report delivered with fallback banner."
             )
+            if delivery_cfg.get("alerts", {}).get("on_llm_fallback", False):
+                from wbsb.delivery.alerts import build_llm_fallback_alert, send_alert
+
+                try:
+                    send_alert(build_llm_fallback_alert(run_id), delivery_cfg)
+                except Exception:  # noqa: BLE001
+                    pass  # alert dispatch is best-effort
     except Exception:  # noqa: BLE001
         pass  # manifest unreadable; non-fatal
 

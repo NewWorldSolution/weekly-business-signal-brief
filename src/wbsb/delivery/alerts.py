@@ -17,6 +17,19 @@ def build_pipeline_error_alert(error: str, run_id: str | None) -> dict:
     }
 
 
+def build_llm_fallback_alert(run_id: str | None) -> dict:
+    """Build alert payload for the LLM fallback condition."""
+    return {
+        "type": "llm_fallback",
+        "title": "⚠️ WBSB — AI Analysis Unavailable",
+        "message": (
+            "AI narrative generation failed or was unavailable this week. "
+            "The report was delivered with a deterministic fallback."
+        ),
+        "run_id": run_id,
+    }
+
+
 def build_no_file_alert(watch_directory: str) -> dict:
     """Build alert payload for the no-new-file condition."""
     return {

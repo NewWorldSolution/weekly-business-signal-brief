@@ -8,6 +8,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from wbsb.delivery.alerts import (
+    build_llm_fallback_alert,
     build_no_file_alert,
     build_pipeline_error_alert,
     send_alert,
@@ -44,6 +45,21 @@ def test_no_file_alert_structure() -> None:
     assert alert["title"] == "📋 WBSB — No New Data Detected"
     assert "data/incoming" in alert["message"]
     assert "Upload a file" in alert["message"]
+
+
+def test_llm_fallback_alert_structure() -> None:
+    alert = build_llm_fallback_alert(run_id="20260312T080000Z_abc123")
+
+    assert alert["type"] == "llm_fallback"
+    assert "AI" in alert["title"] or "Unavailable" in alert["title"]
+    assert "fallback" in alert["message"].lower() or "unavailable" in alert["message"].lower()
+    assert alert["run_id"] == "20260312T080000Z_abc123"
+
+
+def test_llm_fallback_alert_run_id_none() -> None:
+    alert = build_llm_fallback_alert(run_id=None)
+
+    assert alert["run_id"] is None
 
 
 # ---------------------------------------------------------------------------
@@ -113,3 +129,52 @@ def test_send_alert_non_raising(monkeypatch: pytest.MonkeyPatch) -> None:
     for r in results:
         assert r.status == DeliveryStatus.failed
         assert r.error is not None
+
+
+# ---------------------------------------------------------------------------
+# CLI-level visible warning tests
+# ---------------------------------------------------------------------------
+
+
+def test_cli_auto_run_emits_no_file_warning(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Auto-run with no matching file must emit a visible warning to stdout."""
+    from typer.testing import CliRunner
+
+    import wbsb.scheduler.auto as auto_mod
+    from wbsb.cli import app
+
+    monkeypatch.setattr(auto_mod, "find_latest_input", lambda *_args, **_kw: None)
+
+    result = CliRunner().invoke(
+        app, ["run", "--auto", "--watch-dir", str(tmp_path)]
+    )
+
+    assert "⚠️" in result.output
+    assert "no new data file" in result.output.lower()
+    assert result.exit_code == 0
+
+
+def test_cli_run_emits_pipeline_error_warning(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Pipeline exception must emit a visible warning containing the error text."""
+    from typer.testing import CliRunner
+
+    import wbsb.pipeline as pipeline_mod
+    from wbsb.cli import app
+
+    def _raise(*_args, **_kwargs):  # noqa: ANN001, ANN202
+        raise RuntimeError("missing required column: revenue")
+
+    monkeypatch.setattr(pipeline_mod, "execute", _raise)
+
+    fake_input = tmp_path / "data.csv"
+    fake_input.write_text("col\n1\n")
+
+    result = CliRunner().invoke(app, ["run", "--input", str(fake_input)])
+
+    assert "⚠️" in result.output
+    assert "Pipeline error" in result.output
+    assert result.exit_code == 1
