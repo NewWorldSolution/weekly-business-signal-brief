@@ -2,12 +2,13 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies first (layer cached until pyproject.toml changes)
+# Copy package descriptor and source, then install
+# (editable install requires src/ to exist at install time)
 COPY pyproject.toml .
+COPY src/ src/
 RUN pip install --no-cache-dir -e .
 
-# Copy source after deps (only invalidates this layer on code changes)
-COPY src/ src/
+# Config is runtime-only; copy after install so config changes don't bust the pip layer
 COPY config/ config/
 
 # Runtime directories populated via volume mounts — never baked in
