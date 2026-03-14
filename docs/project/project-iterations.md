@@ -16,8 +16,8 @@
 | I4 | LLM Integration | ✅ Complete | ✅ |
 | I5 | Analytical Reasoning Upgrade | ✅ Complete | ✅ |
 | I6 | Historical Memory & Trend Awareness | ✅ Complete | ✅ |
-| I9 | Deployment & Delivery | 🔲 Planned | ✅ |
 | I7 | Evaluation Framework & Feedback Loop | ✅ Complete | ✅ |
+| I9 | Deployment & Delivery | 🔲 In Progress | ✅ |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned | — |
 | I10 | Multi-File Data Consolidation | 🔲 Planned | — |
 
@@ -174,7 +174,7 @@ Move the LLM from per-signal summarization to structured, section-based analysis
 ---
 
 ## Iteration 6 — Historical Memory & Trend Awareness
-**Status:** 🔲 Planned | **MVP:** ✅ Required
+**Status:** ✅ Complete | **MVP:** ✅ Required
 
 ### Goal
 Give the system memory across weeks. Today every report is stateless — the LLM sees only this week vs last week. With historical context, the system can detect trajectories ("CAC has risen for 3 consecutive weeks, now up 47% from 4 weeks ago") and the LLM can reason about whether a metric is recovering, compounding, or stable.
@@ -284,7 +284,7 @@ tests/test_llm_adapter.py          ← extend for trend context in prompt
 ---
 
 ## Iteration 9 — Deployment & Delivery
-**Status:** 🔲 Planned | **MVP:** ✅ Required
+**Status:** 🔲 In Progress | **MVP:** ✅ Required
 
 ### Goal
 Get the system running automatically on a server and delivering reports to where the operator already is. This is what makes WBSB a product rather than a local script.
@@ -709,12 +709,12 @@ MVP is complete when all of the following are true:
 - [ ] `wbsb eval` passes all golden cases (I7)
 
 **Ongoing**
-- [ ] All tests passing (217 baseline + new per iteration)
+- [ ] All tests passing (324 baseline + new per iteration)
 - [ ] Ruff clean
 - [ ] Docker image builds and runs end-to-end
 
 ---
 
 *Document created: 2026-03-09*
-*Reflects state after Iteration 5 completion.*
+*Updated: 2026-03-14 — reflects state after Iteration 7 completion and Iteration 9 start.*
 *Update this document at the start of each iteration with actual deliverables and any scope changes.*

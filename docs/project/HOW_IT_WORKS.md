@@ -415,20 +415,29 @@ weekly-business-signal-brief/
 │   │   ├── llm.py                # LLM orchestration and fallback
 │   │   ├── llm_adapter.py        # Anthropic API client and validation
 │   │   └── prompts/              # System and user prompt templates
+│   ├── history/
+│   │   ├── store.py              # RunRecord, derive_dataset_key(), HistoryReader (I6)
+│   │   └── trends.py             # compute_trends() — 6 deterministic trend labels (I6)
+│   ├── eval/
+│   │   ├── scorer.py             # Grounding, coverage, hallucination scoring (I7)
+│   │   ├── runner.py             # Golden dataset runner (I7)
+│   │   └── golden/               # Curated golden test cases (I7)
+│   ├── feedback/
+│   │   └── store.py              # save_feedback(), feedback query helpers (I7)
 │   ├── domain/models.py          # Pydantic domain models
 │   ├── pipeline.py               # Pipeline orchestrator
-│   └── cli.py                    # Typer CLI (wbsb run, wbsb version)
+│   └── cli.py                    # Typer CLI (wbsb run, wbsb eval, wbsb feedback, wbsb version)
 ├── config/
 │   └── rules.yaml                # All signal thresholds and guardrail values
 ├── examples/datasets/            # 10 synthetic test datasets
 ├── runs/                         # Output directory (one folder per run)
-├── tests/                        # pytest test suite (271 tests)
+├── feedback/                     # Operator feedback storage (gitignored)
+├── tests/                        # pytest test suite (324 tests)
 ├── docs/project/project-iterations.md   # Full roadmap (I1–I10)
-├── docs/iterations/i5/summary.md           # Iteration 5 detailed summary
 └── docs/project/HOW_IT_WORKS.md         # This file
 ```
 
 ---
 
-*System state as of Iteration 6 — March 2026.*
-*271 tests passing. Ruff clean. All thresholds configurable via `config/rules.yaml`.*
+*System state as of Iteration 7 — March 2026.*
+*324 tests passing. Ruff clean. All thresholds configurable via `config/rules.yaml`.*
