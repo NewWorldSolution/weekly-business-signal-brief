@@ -123,13 +123,13 @@ class FeedbackHandler(BaseHTTPRequestHandler):
             self._send_json(500, {"status": "error", "message": "Internal server error"})
             return
 
-        # ── Audit log — comment is intentionally excluded ─────────────────────
+        # ── Audit log — only run_id, section, label per frozen contract ─────────
+        # feedback_id and comment are intentionally excluded.
         _log.info(
             "feedback_received",
             run_id=run_id,
             section=section,
             label=label,
-            feedback_id=feedback_id,
         )
 
         self._send_json(200, {"status": "ok", "feedback_id": feedback_id})

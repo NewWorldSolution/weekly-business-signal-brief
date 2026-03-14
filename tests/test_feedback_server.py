@@ -152,6 +152,60 @@ def test_comment_truncated_silently(feedback_server) -> None:
     assert len(stored["comment"]) == 1000
 
 
+def test_operator_default_and_cap(feedback_server) -> None:
+    """operator defaults to 'anonymous' when absent; long operators are capped at 100 chars."""
+    url, feedback_dir = feedback_server
+
+    # Case 1: operator absent → stored as "anonymous"
+    payload_no_op = {k: v for k, v in _VALID_PAYLOAD.items() if k != "operator"}
+    status, _ = _post(f"{url}/feedback", payload_no_op)
+    assert status == 200
+    files = sorted(feedback_dir.glob("*.json"), key=lambda p: p.stat().st_mtime)
+    stored = json.loads(files[-1].read_text())
+    assert stored["operator"] == "anonymous"
+
+    # Case 2: operator > 100 chars → stored truncated to 100
+    long_operator = "O" * 200
+    payload_long_op = {**_VALID_PAYLOAD, "operator": long_operator}
+    status, _ = _post(f"{url}/feedback", payload_long_op)
+    assert status == 200
+    files = sorted(feedback_dir.glob("*.json"), key=lambda p: p.stat().st_mtime)
+    stored = json.loads(files[-1].read_text())
+    assert len(stored["operator"]) == 100
+
+
+def test_audit_log_excludes_comment_and_feedback_id(
+    feedback_server, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The audit log must emit only run_id, section, label — not comment or feedback_id."""
+    url, _ = feedback_server
+
+    logged: list[dict] = []
+
+    import wbsb.feedback.server as server_module
+
+    original_info = server_module._log.info
+
+    def capturing_info(event: str, **kwargs: object) -> None:
+        if event == "feedback_received":
+            logged.append({"event": event, **kwargs})
+        original_info(event, **kwargs)
+
+    monkeypatch.setattr(server_module._log, "info", capturing_info)
+
+    payload = {**_VALID_PAYLOAD, "comment": "Secret comment that must not be logged."}
+    status, _ = _post(f"{url}/feedback", payload)
+    assert status == 200
+
+    assert len(logged) == 1, "expected exactly one feedback_received log entry"
+    entry = logged[0]
+    assert "run_id" in entry
+    assert "section" in entry
+    assert "label" in entry
+    assert "comment" not in entry, "comment must never appear in the audit log"
+    assert "feedback_id" not in entry, "feedback_id must not appear in the audit log"
+
+
 def test_feedback_id_not_derived_from_input(feedback_server) -> None:
     """The output file name must not contain run_id or section values."""
     url, feedback_dir = feedback_server
