@@ -1,7 +1,9 @@
 services:
   wbsb:
     build: .
-    env_file: .env          # developer local — never committed
+    env_file:
+      - path: .env          # developer local — never committed
+        required: false     # valid in clean checkout; secrets injected by orchestrator
     volumes:
       - ./runs:/app/runs
       - ./data:/app/data
