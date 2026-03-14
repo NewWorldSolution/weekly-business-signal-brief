@@ -2,7 +2,7 @@
 ## Weekly Business Signal Brief — Full Roadmap
 
 **MVP Definition:** Iterations I1–I7 + I9 complete.
-**Post-MVP:** I8 (dashboard polish), I10 (multi-file data consolidation).
+**Post-MVP:** I8 (dashboard polish), I10 (multi-file data consolidation), I11 (security hardening).
 
 ---
 
@@ -20,6 +20,7 @@
 | I9 | Deployment & Delivery | 🔲 In Progress | ✅ |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned | — |
 | I10 | Multi-File Data Consolidation | 🔲 Planned | — |
+| I11 | Security Hardening & Production Readiness | 🔲 Planned | — |
 
 ---
 
@@ -663,6 +664,270 @@ wbsb run \
 - Missing columns after merge produce AuditEvents, not silent failures
 - Existing `wbsb run -i file.csv` interface unchanged
 - All existing tests pass; new tests for consolidation logic
+
+---
+
+## Iteration 11 — Security Hardening & Production Readiness
+**Status:** 🔲 Planned | **Post-MVP**
+
+### Goal
+Move WBSB from "deployable MVP" to "defensible for shared or hosted use." I9 introduces the first inbound HTTP surface (`POST /feedback`) and outbound delivery credentials (Slack/Teams webhooks). That is sufficient for an internal MVP but not for any deployment reachable by untrusted parties. I11 adds deliberate security controls across authentication, transport security, abuse prevention, secrets lifecycle, runtime hardening, supply chain, and observability.
+
+---
+
+### Threat Model
+
+Before building controls, the threats must be named:
+
+| Threat | Attack Vector | Impact |
+|---|---|---|
+| Unauthenticated feedback injection | Direct POST to `/feedback` from internet | Pollutes feedback store; disk fill |
+| Replay attack | Re-sending a captured valid POST | Duplicate/forged feedback records |
+| Credential exposure | Webhook URLs or API keys in logs/artifacts | Account takeover on Teams/Slack/Anthropic |
+| Disk fill / DoS | Flood of large valid or invalid POSTs | Service unavailability |
+| Container escape / lateral movement | Compromised process running as root | Host-level damage beyond feedback dir |
+| Dependency supply chain | Vulnerable transitive Python package | RCE, credential theft |
+| Information disclosure | Stack traces or paths in error responses | Reconnaissance for further attacks |
+| Path traversal | Crafted file paths via user input | File read/write outside permitted dirs |
+| TLS stripping | Plaintext HTTP in transit | Credential interception (auth header, payload) |
+
+The MVP already mitigates path traversal (UUID-only file paths) and partial information disclosure (comment not logged). I11 closes the remaining gaps.
+
+---
+
+### What to Build
+
+#### 11.1 — Transport Security (TLS Enforcement)
+
+All traffic to `/feedback` must be encrypted. Plaintext HTTP exposes the `X-WBSB-Feedback-Secret` header and payload content to network-level interception.
+
+**Requirements:**
+- The server MUST be deployed behind a TLS-terminating reverse proxy (nginx, Caddy, Azure App Gateway, or equivalent). The Python HTTP server does not handle TLS directly — this is correct and intentional.
+- If the request arrives without TLS evidence, the application SHOULD reject or warn based on a configurable `WBSB_REQUIRE_HTTPS=true` environment variable checked at startup.
+- The `X-Forwarded-Proto` header MUST be validated when behind a proxy: requests arriving with `X-Forwarded-Proto: http` are rejected with HTTP 400.
+- Document the required reverse proxy TLS configuration in `docs/deployment/tls.md`.
+- Self-signed certificates are not acceptable for production; document minimum: Let's Encrypt (Certbot) or a CA-issued cert.
+
+#### 11.2 — Feedback Endpoint Authentication (HMAC Shared Secret)
+
+Add real, cryptographically verifiable authentication to `POST /feedback`.
+
+**Mechanism: HMAC-SHA256 request signing**
+
+Every request must include:
+- `X-WBSB-Timestamp`: Unix timestamp (seconds) of request creation
+- `X-WBSB-Signature`: `HMAC-SHA256(secret, f"{timestamp}.{body_bytes}")`
+
+The server verifies:
+1. `X-WBSB-Timestamp` is within ±300 seconds of server time (timestamp freshness window — this also serves as replay protection, see 11.3)
+2. HMAC verification using `hmac.compare_digest()` — constant-time comparison, prevents timing attacks
+3. Reject with HTTP 401 if the header is absent or fails verification
+4. Reject with HTTP 400 if the timestamp is malformed
+
+**Implementation notes:**
+- Secret sourced exclusively from `WBSB_FEEDBACK_SECRET` environment variable; server refuses to start if unset in non-dev mode
+- Use Python stdlib `hmac` and `hashlib` — no new dependencies
+- Never log the raw secret or signature value
+- Do not use a static "dev bypass" in production builds; use a `WBSB_ENV=development` guard that requires explicit opt-in
+
+**Why HMAC over a plain shared secret header:**
+A plain header check (`X-WBSB-Feedback-Secret: mytoken`) is vulnerable to replay (captured token reused indefinitely). HMAC-SHA256 with a timestamp binds the signature to the exact request and time window, making captured requests useless after 5 minutes.
+
+#### 11.3 — Replay Attack Prevention
+
+Replay protection is built into the HMAC scheme (11.2) via timestamp freshness. However, within the 5-minute window, the same signed payload can still be replayed.
+
+**Additional nonce-based deduplication:**
+- Require a `X-WBSB-Nonce` header (UUID4 or random 128-bit hex)
+- Server maintains an in-memory nonce store (TTL = 10 minutes, 2× the timestamp window)
+- Any nonce seen more than once within the TTL is rejected with HTTP 409 Conflict
+- Nonce store is bounded: maximum 10,000 entries; oldest entries evicted when full (LRU or FIFO)
+
+**Limitations to document:**
+- The nonce store is in-process and does not survive restart. On restart, the freshness window is the only protection for the first 5 minutes.
+- For multi-instance deployments, a shared store (Redis or equivalent) is required. Document this explicitly as an upgrade path.
+
+#### 11.4 — Rate Limiting and Abuse Controls
+
+Prevent disk fill and denial-of-service from flood traffic.
+
+**Per-IP rate limiting:**
+- Maximum 10 requests per 60-second sliding window per source IP
+- Burst allowance: 3 additional requests above limit before backpressure
+- Return HTTP 429 with `Retry-After` header when limit exceeded
+- Implemented in-process using a sliding window counter (token bucket acceptable)
+
+**Global rate limiting:**
+- Maximum 100 requests per 60 seconds across all IPs (circuit breaker for coordinated floods)
+- Return HTTP 503 with `Retry-After` when global limit exceeded
+
+**Implementation constraints:**
+- Use Python stdlib only; no external rate-limiting libraries
+- In-memory only; state does not persist across restarts (document this limitation)
+- For multi-instance or persistent rate limiting, document Redis upgrade path
+
+**Structured rejection logging:**
+- Log `rate_limit_exceeded` event with: source IP (pseudonymized — last octet zeroed), rate_window, request_count
+- Never log request body or headers in rejection log entry
+
+#### 11.5 — Secrets Lifecycle Management
+
+Standardize how every secret is sourced, rotated, and audited across all deployment environments.
+
+**Required secrets:**
+| Variable | Purpose | Required for |
+|---|---|---|
+| `WBSB_FEEDBACK_SECRET` | HMAC signing key for `/feedback` | Production deployment |
+| `TEAMS_WEBHOOK_URL` | Outbound Teams delivery | Teams delivery |
+| `SLACK_WEBHOOK_URL` | Outbound Slack delivery | Slack delivery |
+| `ANTHROPIC_API_KEY` | LLM narrative generation | `--llm-mode full` |
+
+**Requirements:**
+- Document all secrets in `.env.example` with placeholder values and descriptions — never real values
+- Secrets are injected at runtime only: environment variables, Docker secrets (`--secret`), or a secrets manager
+- No secrets in Docker image layers; verify with `docker history --no-trunc wbsb` and image scan
+- Rotation: webhook URLs and the HMAC secret must be rotatable without code changes (env var only)
+- Add a pre-flight check: server logs a startup warning (not error) for each optional secret that is absent; fails hard for required secrets
+- Add `pip-audit` to CI to catch known CVEs in Python dependencies before merge
+
+**What is out of scope for I11:**
+- Automatic secret rotation (e.g., Azure Key Vault rotation triggers)
+- Vault agent sidecar patterns
+These are documented as upgrade paths, not implemented.
+
+#### 11.6 — Dependency and Supply Chain Security
+
+Vulnerable transitive dependencies are a real attack vector. I11 adds automated controls.
+
+**Requirements:**
+- Add `pip-audit` to the CI pipeline; build fails on any HIGH or CRITICAL CVE
+- Pin all direct dependencies to exact versions in `pyproject.toml` (`==` not `>=`)
+- Generate and commit `requirements.lock` (or use `pip-compile`) for reproducible builds
+- Docker image: add `trivy` image scan step to CI; fail on CRITICAL severity
+- Do not install build tools (`gcc`, `build-essential`) in the final production image; use multi-stage Docker build
+
+#### 11.7 — File and Runtime Hardening
+
+Reduce blast radius if the process is compromised.
+
+**Container hardening:**
+- Run as a dedicated non-root user (`USER wbsb`, UID 1000) in Dockerfile
+- Set `read_only: true` on all container mounts except `runs/`, `feedback/`, and temp dirs
+- Use `--cap-drop=ALL` in Docker / compose; add back only what is explicitly required (none expected)
+- Avoid `privileged: true` in any compose configuration
+- Use distroless or slim base image; document justification for any added packages
+
+**File permission hardening:**
+- Feedback JSON artifacts created with mode `0o600` (owner-read-only)
+- Log files created with mode `0o640` (owner-read-write, group-read)
+- The `feedback/` directory created with mode `0o700`
+
+**Error response hardening:**
+- All HTTP error responses return only: `{"status": "error", "message": "<user-safe string>"}`
+- Stack traces, file paths, module names, and Python version must never appear in HTTP responses
+- Verify with test: inject invalid JSON, oversized body, bad signature — assert no stack trace in response body
+
+#### 11.8 — Security Observability
+
+Provide enough visibility to detect and investigate misuse without leaking sensitive data.
+
+**Required structured log events:**
+
+| Event | Fields | Never log |
+|---|---|---|
+| `auth_failure` | source_ip (pseudonymized), reason, timestamp | secret, signature, request body |
+| `rate_limit_exceeded` | source_ip (pseudonymized), window, count | request body, headers |
+| `replay_detected` | nonce (truncated), timestamp_delta | request body, secret |
+| `feedback_received` | run_id, section, label | comment, feedback_id, operator |
+| `invalid_input` | field, reason | field value |
+
+**Pseudonymization:** Source IP last octet zeroed before logging (e.g., `192.168.1.0` not `192.168.1.47`). Document that full IPs may be available in reverse proxy access logs, not application logs.
+
+**Alerting guidance (operational, not code):**
+- Document thresholds that suggest active attack: >50 auth failures in 5 minutes, >200 rate limit rejections in 1 minute
+- Document how to connect structured logs to an alerting tool (Grafana Loki, Datadog, Azure Monitor) — integration itself is out of scope
+
+---
+
+### Acceptance Criteria
+
+**Authentication:**
+- `POST /feedback` with missing `X-WBSB-Signature` returns HTTP 401
+- `POST /feedback` with invalid HMAC returns HTTP 401
+- `POST /feedback` with expired timestamp (>300s) returns HTTP 401
+- `POST /feedback` with replayed nonce returns HTTP 409
+- `POST /feedback` with valid HMAC and fresh nonce returns HTTP 200
+
+**Transport:**
+- `X-Forwarded-Proto: http` request rejected with HTTP 400 when `WBSB_REQUIRE_HTTPS=true`
+- TLS deployment documented in `docs/deployment/tls.md`
+
+**Rate limiting:**
+- 11th request in 60-second window from same IP returns HTTP 429 with `Retry-After` header
+- Global circuit breaker triggers at 100 req/60s and returns HTTP 503
+
+**Secrets:**
+- Server refuses to start without `WBSB_FEEDBACK_SECRET` in non-dev mode
+- No secrets appear in `docker history --no-trunc wbsb` output
+- `.env.example` documents all four required variables with descriptions
+- `pip-audit` passes with no HIGH or CRITICAL CVEs
+
+**Runtime hardening:**
+- Container process runs as UID 1000 (non-root); `docker inspect` confirms
+- Feedback artifacts created with permissions `0o600`
+- HTTP error responses contain no stack traces, paths, or module names
+
+**Observability:**
+- `auth_failure` event logged on every rejected request; no secret in log entry
+- `rate_limit_exceeded` event logged with pseudonymized IP
+- `comment` field never appears in any log event
+
+**Regression:**
+- All existing tests pass; ruff clean
+- `wbsb eval` golden cases all pass
+- Valid authenticated requests behave identically to current behaviour
+
+---
+
+### Suggested Files
+```text
+src/wbsb/feedback/server.py         ← auth, replay, rate limiting middleware
+src/wbsb/feedback/auth.py           ← HMAC verification, nonce store (new)
+src/wbsb/feedback/ratelimit.py      ← rate limiter (new)
+src/wbsb/cli.py                     ← WBSB_REQUIRE_HTTPS startup check
+src/wbsb/observability/logging.py   ← pseudonymization helper
+Dockerfile                          ← non-root user, multi-stage, distroless
+docker-compose.yml                  ← cap-drop, read-only mounts
+.env.example                        ← all secrets documented
+docs/deployment/tls.md             ← TLS and reverse proxy setup (new)
+docs/deployment/security.md        ← threat model, controls summary (new)
+tests/test_feedback_auth.py         ← HMAC, nonce, timestamp tests (new)
+tests/test_feedback_ratelimit.py    ← rate limit and 429/503 tests (new)
+tests/test_security_hardening.py    ← error response hygiene, non-root (new)
+.github/workflows/security.yml      ← pip-audit + trivy CI step (new)
+```
+
+### Out of Scope
+- OAuth 2.0 / OpenID Connect / SSO
+- Multi-tenant RBAC or per-operator access control
+- Automatic secret rotation (Azure Key Vault rotation triggers, Vault agent)
+- SIEM integration or log forwarding configuration
+- Formal penetration testing or third-party security audit
+- Web Application Firewall (WAF) configuration
+- DDoS mitigation beyond in-process rate limiting (use hosting-layer controls for volumetric attacks)
+
+### Definition of Done
+WBSB can be deployed to a shared or hosted environment with:
+- every inbound request cryptographically authenticated and replay-protected
+- abuse controls that prevent disk fill and service exhaustion
+- all secrets injected at runtime with no baked-in values
+- TLS enforced at the transport layer and validated at the application layer
+- container running as non-root with minimal writable surface
+- supply chain protected by CVE scanning and pinned dependencies
+- security-relevant events observable in structured logs without sensitive data leakage
+- a written threat model, controls summary, and deployment security guide
+
+At the end of I11, WBSB's security posture rests on deliberate, testable controls — not perimeter assumptions.
 
 ---
 
