@@ -60,7 +60,7 @@ All three acquisition signals moved unfavorably this week.
 ### Requirements
 - Python 3.11+
 - Install: `pip install -e .`
-- For AI mode: `ANTHROPIC_API_KEY` in environment or `.env` file
+- For AI mode: `ANTHROPIC_API_KEY` in environment or `.env` file (copy `.env.example`)
 
 ### Run a Report
 
@@ -71,10 +71,10 @@ wbsb run -i your_data.csv
 
 **AI-enhanced mode (recommended):**
 ```bash
-wbsb run -i your_data.csv --llm-mode full --llm-provider anthropic
+wbsb run -i your_data.csv --llm-mode full
 ```
 
-**Try it with example data:**
+**Try it with the included example data:**
 ```bash
 wbsb run -i examples/datasets/dataset_07_extreme_ad_spend.csv --llm-mode full
 ```
@@ -172,6 +172,53 @@ All thresholds are configurable in `config/rules.yaml` without touching code.
 
 ---
 
+## Automated Delivery
+
+After a run completes, WBSB can push the report directly to Teams or Slack.
+
+### Deliver a Report
+
+```bash
+# Deliver immediately after a run
+wbsb run -i your_data.csv --llm-mode full --deliver
+
+# Re-deliver a past run by ID
+wbsb deliver --run-id 20260309T092734Z_085775
+```
+
+### Configure Delivery
+
+Copy `.env.example` to `.env` and set your webhook URLs:
+
+```bash
+TEAMS_WEBHOOK_URL=https://your-org.webhook.office.com/...
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+```
+
+Enable the channel in `config/delivery.yaml`:
+
+```yaml
+delivery:
+  teams:
+    enabled: true
+    webhook_url: "${TEAMS_WEBHOOK_URL}"
+  slack:
+    enabled: false
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+```
+
+### Automatic Scheduling
+
+Run WBSB automatically whenever a new data file appears:
+
+```bash
+wbsb run --auto --watch-dir data/incoming --deliver
+```
+
+The scheduler detects the latest unprocessed file in `data/incoming`, runs the pipeline, and (if `--deliver` is set) dispatches to configured channels. Already-processed files are skipped.
+
+---
+
 ## Output Artifacts
 
 Each run writes a timestamped folder to `runs/`:
@@ -189,9 +236,30 @@ runs/20260309T092734Z_085775/
 
 ---
 
+## Running with Docker
+
+```bash
+# Build the image
+docker build -t wbsb .
+
+# Run a report (mount your data directory)
+docker run --rm \
+  --env-file .env \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/runs:/app/runs \
+  wbsb wbsb run -i data/your_data.csv --llm-mode full
+
+# Or use docker-compose
+docker compose run --rm wbsb wbsb run -i data/your_data.csv
+```
+
+Secrets are injected via `--env-file` or environment variables at runtime. The `.env` file is never baked into the image.
+
+---
+
 ## Project Status
 
-**Iteration 5 of 10 — Foundation phase complete.**
+**MVP complete — I1 through I9 shipped.**
 
 | Iteration | Theme | Status |
 |---|---|---|
@@ -200,15 +268,14 @@ runs/20260309T092734Z_085775/
 | I3 | Business Reporting Layer | ✅ Complete |
 | I4 | LLM Integration | ✅ Complete |
 | I5 | Analytical Reasoning Upgrade | ✅ Complete |
-| I6 | Historical Memory & Trend Awareness | 🔲 Next |
-| I9 | Deployment & Delivery (Teams/Slack) | 🔲 Planned |
-| I7 | Evaluation Framework & Feedback Loop | 🔲 Planned |
+| I6 | Historical Memory & Trend Awareness | ✅ Complete |
+| I7 | Evaluation Framework & Feedback Loop | ✅ Complete |
+| I9 | Deployment & Delivery (Teams/Slack, scheduler) | ✅ Complete |
+| I11 | Security Hardening & Production Readiness | 🔲 Next |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned |
 | I10 | Multi-File Data Consolidation | 🔲 Planned |
 
-**MVP** closes when I6, I9, and I7 are complete.
-
-Current state: 271 tests passing · Ruff clean · All thresholds configurable via `config/rules.yaml`
+Current state: **391 tests passing · Ruff clean · All thresholds configurable via `config/rules.yaml`**
 
 ---
 
@@ -217,9 +284,8 @@ Current state: 271 tests passing · Ruff clean · All thresholds configurable vi
 | Document | Audience | Description |
 |---|---|---|
 | [`docs/project/HOW_IT_WORKS.md`](docs/project/HOW_IT_WORKS.md) | Developers / operators | Full system guide — pipeline, metrics, signals, CLI reference, artifacts |
-| [`docs/project/PROJECT_BRIEF.md`](docs/project/PROJECT_BRIEF.md) | Clients / investors / stakeholders | Business-oriented product brief — problem, value, vision, roadmap |
+| [`docs/project/PROJECT_BRIEF.md`](docs/project/PROJECT_BRIEF.md) | Stakeholders | Business-oriented product brief — problem, value, vision, roadmap |
 | [`docs/project/project-iterations.md`](docs/project/project-iterations.md) | Product / engineering | Full iteration roadmap with task breakdowns and acceptance criteria |
-| [`docs/iterations/i5/summary.md`](docs/iterations/i5/summary.md) | Engineering | Detailed I5 summary — what was built, bugs fixed, model comparison |
 | [`CLAUDE.md`](CLAUDE.md) | Contributors | Architecture rules, coding constraints, working conventions |
 
 ---
@@ -239,14 +305,41 @@ src/wbsb/
 │   ├── template.md.j2        # Markdown report template
 │   ├── llm.py                # LLM orchestration and fallback
 │   ├── llm_adapter.py        # Anthropic API client and response validation
-│   └── prompts/              # System and user prompt templates (v2)
+│   └── prompts/              # System and user prompt templates
+├── history/
+│   ├── store.py              # Run history index, dataset-scoped reader
+│   └── trends.py             # Deterministic trend labels (6 types)
+├── eval/
+│   ├── scorer.py             # Grounding, coverage, hallucination scoring
+│   ├── runner.py             # Golden dataset runner
+│   └── golden/               # Curated golden test cases
+├── delivery/
+│   ├── orchestrator.py       # deliver_run() — never raises, all errors captured
+│   ├── teams.py              # Teams Adaptive Card builder + sender
+│   ├── slack.py              # Slack Block Kit builder + sender
+│   ├── alerts.py             # LLM fallback, pipeline error, no-file alerts
+│   ├── config.py             # Config loader, webhook URL resolver
+│   └── models.py             # DeliveryResult, DeliveryStatus, DeliveryTarget
+├── scheduler/
+│   ├── auto.py               # File discovery, duplicate detection, size guard
+│   └── watcher.py            # Path traversal guard
+├── feedback/
+│   ├── server.py             # POST /feedback webhook server
+│   ├── store.py              # save/list/summarize/export feedback
+│   └── models.py             # FeedbackEntry, VALID_SECTIONS, VALID_LABELS
 ├── domain/models.py          # Pydantic domain models
 ├── pipeline.py               # Pipeline orchestrator
 └── cli.py                    # Typer CLI
 
-config/rules.yaml             # All signal thresholds — edit here, not in code
+config/
+├── rules.yaml                # All signal thresholds — edit here, not in code
+└── delivery.yaml             # Delivery targets and scheduler settings
+
 examples/datasets/            # 10 synthetic test datasets
-tests/                        # 217 pytest tests
+Dockerfile                    # Production container
+docker-compose.yml            # Local development / compose setup
+.env.example                  # All required environment variables documented
+tests/                        # 391 pytest tests
 ```
 
 ---
@@ -259,3 +352,4 @@ tests/                        # 217 pytest tests
 - **Section-level fallback** — if any AI section fails, the rest of the report is unaffected
 - **Full auditability** — SHA-256 hashes, structured logs, and an AuditEvent trail on every run
 - **No recommendation engine** — the system observes and explains; it never advises
+- **Delivery never blocks** — all delivery failures are captured as results, never exceptions

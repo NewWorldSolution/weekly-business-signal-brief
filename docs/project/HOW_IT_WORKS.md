@@ -256,6 +256,30 @@ wbsb run -i your_data.csv --week 2024-W48
 
 The specified week becomes the "current week" and the week before it becomes the "prior week".
 
+### Delivery Commands (I9)
+
+```bash
+# Deliver immediately after a run
+wbsb run -i your_data.csv --llm-mode full --deliver
+
+# Re-deliver a past run by ID
+wbsb deliver --run-id 20260309T092734Z_085775
+
+# Auto mode: discover and process the latest unprocessed file
+wbsb run --auto --watch-dir data/incoming --deliver
+```
+
+The `--auto` mode reads scheduler defaults from `config/delivery.yaml` (watch directory, filename pattern). It skips files already recorded in the run history index. Use `wbsb deliver --run-id` to re-deliver any past run without re-running the pipeline.
+
+### Feedback Webhook Server (I9)
+
+```bash
+# Start the feedback webhook server (POST /feedback)
+wbsb feedback serve --host 0.0.0.0 --port 8080
+```
+
+Teams and Slack report cards include action buttons that POST feedback to this endpoint. Feedback is stored in `feedback/` (gitignored) and queryable via the feedback CLI.
+
 ### Evaluation and Feedback Commands (I7)
 
 ```bash
@@ -435,28 +459,44 @@ weekly-business-signal-brief/
 │   │   ├── llm_adapter.py        # Anthropic API client and validation
 │   │   └── prompts/              # System and user prompt templates
 │   ├── history/
-│   │   ├── store.py              # RunRecord, derive_dataset_key(), HistoryReader (I6)
-│   │   └── trends.py             # compute_trends() — 6 deterministic trend labels (I6)
+│   │   ├── store.py              # RunRecord, derive_dataset_key(), HistoryReader
+│   │   └── trends.py             # compute_trends() — 6 deterministic trend labels
 │   ├── eval/
-│   │   ├── scorer.py             # Grounding, coverage, hallucination scoring (I7)
-│   │   ├── runner.py             # Golden dataset runner (I7)
-│   │   └── golden/               # Curated golden test cases (I7)
+│   │   ├── scorer.py             # Grounding, coverage, hallucination scoring
+│   │   ├── runner.py             # Golden dataset runner
+│   │   └── golden/               # Curated golden test cases
+│   ├── delivery/
+│   │   ├── orchestrator.py       # deliver_run() — artifact reader, never raises
+│   │   ├── teams.py              # Teams Adaptive Card builder + sender
+│   │   ├── slack.py              # Slack Block Kit builder + sender
+│   │   ├── alerts.py             # LLM fallback, pipeline error, no-file alerts
+│   │   ├── config.py             # Config loader, webhook URL resolver
+│   │   └── models.py             # DeliveryResult, DeliveryStatus, DeliveryTarget
+│   ├── scheduler/
+│   │   ├── auto.py               # File discovery, history check, size guard
+│   │   └── watcher.py            # Path traversal guard
 │   ├── feedback/
-│   │   └── store.py              # save_feedback(), feedback query helpers (I7)
+│   │   ├── server.py             # POST /feedback HTTP webhook server
+│   │   ├── store.py              # save/list/summarize/export feedback
+│   │   └── models.py             # FeedbackEntry, VALID_SECTIONS, VALID_LABELS
 │   ├── domain/models.py          # Pydantic domain models
 │   ├── pipeline.py               # Pipeline orchestrator
-│   └── cli.py                    # Typer CLI (wbsb run, wbsb eval, wbsb feedback, wbsb version)
+│   └── cli.py                    # Typer CLI
 ├── config/
-│   └── rules.yaml                # All signal thresholds and guardrail values
+│   ├── rules.yaml                # All signal thresholds and guardrail values
+│   └── delivery.yaml             # Delivery targets and scheduler settings
 ├── examples/datasets/            # 10 synthetic test datasets
-├── runs/                         # Output directory (one folder per run)
+├── runs/                         # Output directory (one folder per run, gitignored)
 ├── feedback/                     # Operator feedback storage (gitignored)
-├── tests/                        # pytest test suite (324 tests)
-├── docs/project/project-iterations.md   # Full roadmap (I1–I10)
+├── Dockerfile                    # Production container
+├── docker-compose.yml            # Local development / compose setup
+├── .env.example                  # All required environment variables documented
+├── tests/                        # pytest test suite (391 tests)
+├── docs/project/project-iterations.md   # Full roadmap
 └── docs/project/HOW_IT_WORKS.md         # This file
 ```
 
 ---
 
-*System state as of Iteration 7 — March 2026.*
-*324 tests passing. Ruff clean. All thresholds configurable via `config/rules.yaml`.*
+*System state as of Iteration 9 — March 2026. MVP complete.*
+*391 tests passing. Ruff clean. All thresholds configurable via `config/rules.yaml`.*
