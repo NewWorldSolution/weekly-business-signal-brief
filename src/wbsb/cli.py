@@ -1,6 +1,7 @@
 """CLI entry point for WBSB."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import typer
@@ -456,7 +457,29 @@ def feedback_serve(
     port: int = typer.Option(8080, "--port", help="Port to listen on"),
 ) -> None:
     """Start the feedback webhook server (POST /feedback)."""
+    import sys
+
     from wbsb.feedback.server import run_server
+    from wbsb.observability.logging import log_security_event
+
+    wbsb_env = os.environ.get("WBSB_ENV", "production")
+    secret = os.environ.get("WBSB_FEEDBACK_SECRET", "")
+
+    if wbsb_env != "development" and not secret:
+        print(
+            "Error: WBSB_FEEDBACK_SECRET is required in production mode. "
+            "Set WBSB_ENV=development to bypass.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Log startup state — never log the secret value
+    log_security_event(
+        "server_starting",
+        env=wbsb_env,
+        hmac_enabled=(wbsb_env != "development"),
+        https_required=(os.environ.get("WBSB_REQUIRE_HTTPS", "") == "true"),
+    )
 
     typer.echo(f"Starting feedback server on {host}:{port}")
     run_server(host=host, port=port)

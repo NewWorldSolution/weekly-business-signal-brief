@@ -1,6 +1,7 @@
 """Feedback storage functions for WBSB operator feedback."""
 from __future__ import annotations
 
+import os
 import re
 import uuid
 from pathlib import Path
@@ -52,9 +53,11 @@ def save_feedback(entry: FeedbackEntry) -> Path:
     if not entry.feedback_id:
         entry = entry.model_copy(update={"feedback_id": uuid.uuid4().hex})
 
-    FEEDBACK_DIR.mkdir(exist_ok=True)
+    FEEDBACK_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    os.chmod(FEEDBACK_DIR, 0o700)
     path = FEEDBACK_DIR / f"{entry.feedback_id}.json"
     path.write_text(entry.model_dump_json(indent=2))
+    os.chmod(path, 0o600)
     return path
 
 
