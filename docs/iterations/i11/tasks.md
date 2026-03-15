@@ -709,7 +709,7 @@ Insert this as step 0 in the request handling order:
 ```
 0. X-Forwarded-Proto check    → 400 if http and WBSB_REQUIRE_HTTPS=true
 1. Rate limit check           → 429 / 503
-2. Parse headers              → 400
+2. Parse auth headers         → 401 if any auth header absent or nonce malformed
 ...
 ```
 
