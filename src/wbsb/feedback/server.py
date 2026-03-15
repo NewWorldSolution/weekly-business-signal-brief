@@ -109,6 +109,11 @@ class FeedbackHandler(BaseHTTPRequestHandler):
         if require_https:
             proto = self.headers.get("X-Forwarded-Proto", "")
             if proto == "http":
+                log_security_event(
+                    EVENT_INVALID_INPUT,
+                    source_ip=pseudonymize_ip(source_ip),
+                    reason="https_required",
+                )
                 self._send_json(400, {"status": "error", "message": "HTTPS required"})
                 return
 

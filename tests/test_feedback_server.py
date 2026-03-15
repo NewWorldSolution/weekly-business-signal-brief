@@ -505,6 +505,34 @@ def test_https_required_allows_https_proto(feedback_server, monkeypatch) -> None
     assert status == 200
 
 
+def test_https_required_emits_security_event(feedback_server, monkeypatch) -> None:
+    """HTTPS downgrade rejection must emit a log_security_event."""
+    url, _ = feedback_server
+    monkeypatch.setenv("WBSB_REQUIRE_HTTPS", "true")
+
+    logged: list[dict] = []
+
+    import wbsb.feedback.server as server_mod
+
+    original = server_mod.log_security_event
+
+    def capturing(event: str, **kwargs: object) -> None:
+        logged.append({"event": event, **kwargs})
+        original(event, **kwargs)
+
+    monkeypatch.setattr(server_mod, "log_security_event", capturing)
+
+    _post_h(
+        f"{url}/feedback",
+        payload=_VALID_PAYLOAD,
+        extra_headers={"X-Forwarded-Proto": "http"},
+    )
+
+    assert any(
+        e.get("reason") == "https_required" for e in logged
+    ), "expected a security event with reason='https_required'"
+
+
 def test_https_not_required_allows_http_proto(feedback_server, monkeypatch) -> None:
     """WBSB_REQUIRE_HTTPS not set → X-Forwarded-Proto: http is allowed."""
     url, _ = feedback_server
