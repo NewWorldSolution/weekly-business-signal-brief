@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import sys
 import threading
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import wbsb.feedback.auth as auth_mod
 from wbsb.feedback.auth import NonceStore, verify_hmac, verify_timestamp
@@ -139,12 +143,13 @@ def test_nonce_store_different_nonces() -> None:
 def test_nonce_store_capacity_eviction() -> None:
     store = NonceStore()
 
-    with patch.object(auth_mod.time, "time", side_effect=range(20_000, 30_002)):
+    with patch.object(auth_mod.time, "time", return_value=20_000):
         for i in range(10_001):
             assert store.check_and_record(f"nonce-{i}") is True
 
-    assert len(store._store) <= 10_000
+    assert len(store._store) == 10_000
     assert "nonce-0" not in store._store
+    assert "nonce-1" in store._store
     assert "nonce-10000" in store._store
 
 
