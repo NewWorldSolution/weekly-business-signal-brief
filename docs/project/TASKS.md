@@ -33,7 +33,7 @@ Full roadmap with all planned iterations: see `project-iterations.md`.
 | **I6** | **Historical Memory & Trend Awareness** | **✅ Complete** |
 | **I7** | **Evaluation Framework & Feedback Loop** | **✅ Complete** |
 | **I9** | **Deployment & Delivery** | **✅ Complete** |
-| **I11** | **Security Hardening & Production Readiness** | **🔲 In Progress** |
+| **I11** | **Security Hardening & Production Readiness** | **✅ Complete** |
 | I12 | Server Deployment & Production Operations | 🔲 Planned |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned |
 | I10 | Multi-File Data Consolidation | 🔲 Planned |
@@ -270,16 +270,16 @@ Full task detail: see `../iterations/i11/tasks.md`.
 
 | Task | Owner | Description | Status |
 |---|---|---|---|
-| I11-0 | Claude | Pre-work: docs, frozen contract scaffolding | 🔲 In Progress |
-| I11-1 | Codex | HMAC verification + timestamp freshness (`auth.py`) | 🔲 Blocked on I11-0 |
-| I11-2 | Codex | Nonce store — replay prevention (`auth.py`) | 🔲 Blocked on I11-1 |
-| I11-3 | Codex | Rate limiter (`ratelimit.py`) | 🔲 Blocked on I11-0 |
-| I11-4 | Codex | Security observability (`observability/logging.py`) | 🔲 Blocked on I11-0 |
-| I11-5 | Claude | Wire all guards into `server.py` + `cli.py` | 🔲 Blocked on I11-2, I11-3, I11-4 |
-| I11-6 | Codex | Runtime hardening: Dockerfile non-root, file permissions | 🔲 Blocked on I11-0 |
-| I11-7 | Codex | Supply chain: pip-audit, trivy, multi-stage Docker | 🔲 Blocked on I11-6 |
-| I11-8 | You | Architecture review | 🔲 Blocked on I11-5, I11-6, I11-7 |
-| I11-9 | Claude | Final cleanup + merge to main | 🔲 Blocked on I11-8 |
+| I11-0 | Claude | Pre-work: docs, frozen contract scaffolding | ✅ Done — PR #55 merged |
+| I11-1 | Codex | HMAC verification + timestamp freshness (`auth.py`) | ✅ Done — PR #57 merged |
+| I11-2 | Codex | Nonce store — replay prevention (`auth.py`) | ✅ Done — PR #60 merged |
+| I11-3 | Codex | Rate limiter (`ratelimit.py`) | ✅ Done — PR #56 merged |
+| I11-4 | Codex | Security observability (`observability/logging.py`) | ✅ Done — PR #58 merged |
+| I11-5 | Claude | Wire all guards into `server.py` + `cli.py` | ✅ Done — PR #62 merged |
+| I11-6 | Codex | Runtime hardening: Dockerfile non-root, file permissions | ✅ Done — PR #59 merged |
+| I11-7 | Codex | Supply chain: pip-audit, trivy, multi-stage Docker | ✅ Done — PR #61 merged |
+| I11-8 | You | Architecture review | ✅ Done — PASS (zero findings) |
+| I11-9 | Claude | Final cleanup + merge to main | ✅ Done — PR #63 |
 
 ---
 
@@ -295,5 +295,53 @@ main
       ├── feature/i11-4-observability
       ├── feature/i11-5-server-integration
       ├── feature/i11-6-runtime-hardening
-      └── feature/i11-7-supply-chain
+      ├── feature/i11-7-supply-chain
+      └── feature/i11-9-final-cleanup
 ```
+
+---
+
+## Iteration 11 — Definition of Done
+
+**HMAC Authentication (I11-1, I11-2)**
+- [x] `verify_hmac(body, timestamp, signature, secret)` verifies HMAC-SHA256 with constant-time comparison
+- [x] `verify_timestamp(ts)` enforces ±300 s freshness window
+- [x] `NonceStore.check_and_record(nonce)` rejects replays within TTL window; capacity capped at 10,000
+- [x] All auth functions covered by unit tests
+
+**Rate Limiting (I11-3)**
+- [x] Per-IP limit: 10 requests per 60 s sliding window
+- [x] Global circuit breaker: 100 requests per 60 s
+- [x] `RateLimitOutcome` enum: `allowed`, `per_ip_exceeded`, `global_exceeded`
+- [x] Rate limiter covered by unit tests
+
+**Security Observability (I11-4)**
+- [x] `log_security_event()` emits structured JSON with `event`, `source_ip`, and context kwargs
+- [x] `pseudonymize_ip()` coarsely masks IPs (zeroes last IPv4 octet / last IPv6 group) — never logs raw IPs
+- [x] Named event constants: `EVENT_AUTH_FAILURE`, `EVENT_RATE_LIMIT_EXCEEDED`, `EVENT_REPLAY_DETECTED`, `EVENT_FEEDBACK_RECEIVED`, `EVENT_INVALID_INPUT`
+
+**Server Integration (I11-5)**
+- [x] Request handling order enforced: HTTPS → rate limit → headers → timestamp → HMAC → nonce → body validation → storage
+- [x] Dev bypass: `WBSB_ENV=development` skips steps 2–5; rate limiting always applies
+- [x] `wbsb feedback serve` exits 1 with clear error if `WBSB_FEEDBACK_SECRET` unset in production
+- [x] `log_security_event` called at every rejection point with pseudonymized IP
+- [x] Error responses never include stack traces, exception messages, file paths, or Python version strings
+- [x] Body cap (4096 bytes) checked before reading
+
+**Runtime Hardening (I11-6)**
+- [x] Dockerfile uses non-root user `wbsb` (uid 1000)
+- [x] `feedback/` directory created with `chmod 700` — not world-readable
+- [x] `runs/` directory created with `chmod 755`
+
+**Supply Chain (I11-7)**
+- [x] All dependencies pinned to exact versions in `requirements.txt`
+- [x] `pip-audit` passes with zero known vulnerabilities
+- [x] Trivy scan passes with zero HIGH/CRITICAL vulnerabilities in the Docker image
+- [x] Multi-stage Docker build separates builder from runtime
+
+**Quality**
+- [x] 443 tests passing (391 baseline + 52 from I11)
+- [x] Ruff clean
+- [x] All 6 golden eval cases pass
+- [x] I11-8 architecture review: PASS (zero findings)
+- [x] `main` branch stable
