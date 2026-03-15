@@ -83,11 +83,11 @@ main
 ```
 I12-0  [Claude]  Pre-work: docs, runbook skeleton, health endpoint spec    → no dependencies
 I12-1  [Codex]   Health check endpoint (GET /health) in server.py          → I12-0
-I12-2  [Codex]   Deploy script (idempotent bash)                            → I12-0
-I12-3  [Codex]   Reverse proxy config (Caddy or nginx + TLS)               → I12-1
-I12-4  [Codex]   Process supervision (systemd units)                        → I12-3
-I12-5  [Codex]   Scheduler production config + unattended mode              → I12-4
-I12-6  [Claude]  Operational runbook (deploy, rollback, rotate secrets)     → I12-5
+I12-3  [Codex]   Reverse proxy config (Caddy or nginx + TLS)               → I12-0
+I12-4  [Codex]   Process supervision (systemd units)                        → I12-0
+I12-5  [Codex]   Scheduler production config + unattended mode              → I12-0
+I12-2  [Codex]   Deploy script (idempotent bash)                            → I12-3, I12-4, I12-5
+I12-6  [Claude]  Operational runbook (deploy, rollback, rotate secrets)     → I12-1, I12-2
 I12-7  [You]     Architecture review                                         → I12-6
 I12-8  [Claude]  Final cleanup + merge to main                               → I12-7
 ```
@@ -95,9 +95,20 @@ I12-8  [Claude]  Final cleanup + merge to main                               →
 **Dependency diagram:**
 ```
 I12-0
- ├── I12-1 → I12-3 → I12-4 → I12-5 → I12-6 ──► I12-7 → I12-8
- └── I12-2 ─────────────────────────────────────┘
+ ├── I12-1 ──────────────────────────────────────────────────────┐
+ ├── I12-3 ──┐                                                   │
+ ├── I12-4 ──┼──► I12-2 (deploy script — bundles all components) ┼──► I12-6 → I12-7 → I12-8
+ └── I12-5 ──┘                                                   │
+                                                                  ┘
 ```
+
+**Parallelism opportunities:**
+- After I12-0: I12-1, I12-3, I12-4, I12-5 can all start simultaneously (4 Codex worktrees)
+  - I12-3 does not need I12-1 implemented — only needs the server port/path, which I12-0 specifies
+  - I12-4 does not need I12-3 — systemd units only need the run command and port, not the proxy config
+  - I12-5 does not need I12-4 — scheduler config is independent of the feedback server's supervision
+- I12-2 starts after I12-3, I12-4, I12-5 all merge — the deploy script must bundle all components
+- I12-6 starts after I12-1 and I12-2 — runbook needs the health endpoint and deploy script finalised
 
 ---
 
@@ -107,11 +118,11 @@ I12-0
 |---|---|---|---|
 | I12-0 | Claude | Pre-work: docs, runbook skeleton, health endpoint spec | — |
 | I12-1 | Codex | `GET /health` endpoint in `server.py` | I12-0 |
-| I12-2 | Codex | Idempotent deploy script | I12-0 |
-| I12-3 | Codex | Reverse proxy config (Caddy or nginx) + TLS | I12-1 |
-| I12-4 | Codex | systemd unit files for feedback server and scheduler | I12-3 |
-| I12-5 | Codex | Scheduler production config + unattended weekly runs | I12-4 |
-| I12-6 | Claude | Full operational runbook | I12-5 |
+| I12-3 | Codex | Reverse proxy config (Caddy or nginx) + TLS | I12-0 |
+| I12-4 | Codex | systemd unit files for feedback server and scheduler | I12-0 |
+| I12-5 | Codex | Scheduler production config + unattended weekly runs | I12-0 |
+| I12-2 | Codex | Idempotent deploy script (bundles all components) | I12-3, I12-4, I12-5 |
+| I12-6 | Claude | Full operational runbook | I12-1, I12-2 |
 | I12-7 | You | Architecture review | I12-6 |
 | I12-8 | Claude | Final cleanup + merge to main | I12-7 |
 
