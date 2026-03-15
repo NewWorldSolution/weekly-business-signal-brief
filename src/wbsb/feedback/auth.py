@@ -1,3 +1,9 @@
+from __future__ import annotations
+
+import hashlib
+import hmac
+import time
+
 HEADER_TIMESTAMP = "X-WBSB-Timestamp"
 HEADER_SIGNATURE = "X-WBSB-Signature"
 HEADER_NONCE = "X-WBSB-Nonce"
@@ -14,7 +20,16 @@ def verify_hmac(
     Returns False (never raises) if inputs are malformed.
     Signing string: f"{timestamp}.{body.decode('utf-8')}"
     """
-    raise NotImplementedError
+    try:
+        signing_string = f"{timestamp}.{body.decode('utf-8')}"
+        expected = hmac.new(
+            secret.encode("utf-8"),
+            signing_string.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        return hmac.compare_digest(expected, signature)
+    except Exception:
+        return False
 
 
 def verify_timestamp(timestamp: str, max_age_seconds: int = 300) -> bool:
@@ -22,7 +37,11 @@ def verify_timestamp(timestamp: str, max_age_seconds: int = 300) -> bool:
     Returns True if abs(now - timestamp) <= max_age_seconds.
     Returns False if timestamp is non-integer or out of window.
     """
-    raise NotImplementedError
+    try:
+        parsed = int(timestamp)
+    except Exception:
+        return False
+    return abs(time.time() - parsed) <= max_age_seconds
 
 
 class NonceStore:
