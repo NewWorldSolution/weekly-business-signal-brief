@@ -33,7 +33,7 @@ Full roadmap with all planned iterations: see `project-iterations.md`.
 | **I6** | **Historical Memory & Trend Awareness** | **✅ Complete** |
 | **I7** | **Evaluation Framework & Feedback Loop** | **✅ Complete** |
 | **I9** | **Deployment & Delivery** | **✅ Complete** |
-| I11 | Security Hardening & Production Readiness | 🔲 Next |
+| **I11** | **Security Hardening & Production Readiness** | **🔲 In Progress** |
 | I12 | Server Deployment & Production Operations | 🔲 Planned |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned |
 | I10 | Multi-File Data Consolidation | 🔲 Planned |
@@ -253,4 +253,47 @@ main
       ├── feature/i9-6-failure-alerting    ← alerting banners
       ├── feature/i9-7-feedback-webhook    ← feedback HTTP endpoint
       └── feature/i9-8-docker             ← Docker + security
+```
+
+---
+
+# Iteration 11 — Security Hardening & Production Readiness
+
+## Theme
+Move WBSB from a secured MVP to a defensible system for shared or hosted use. Add cryptographic authentication, replay protection, abuse controls, runtime hardening, supply chain scanning, and structured security observability to the feedback webhook.
+
+Full task detail: see `../iterations/i11/tasks.md`.
+
+---
+
+## Task Overview
+
+| Task | Owner | Description | Status |
+|---|---|---|---|
+| I11-0 | Claude | Pre-work: docs, frozen contract scaffolding | 🔲 In Progress |
+| I11-1 | Codex | HMAC verification + timestamp freshness (`auth.py`) | 🔲 Blocked on I11-0 |
+| I11-2 | Codex | Nonce store — replay prevention (`auth.py`) | 🔲 Blocked on I11-1 |
+| I11-3 | Codex | Rate limiter (`ratelimit.py`) | 🔲 Blocked on I11-0 |
+| I11-4 | Codex | Security observability (`observability/logging.py`) | 🔲 Blocked on I11-0 |
+| I11-5 | Claude | Wire all guards into `server.py` + `cli.py` | 🔲 Blocked on I11-2, I11-3, I11-4 |
+| I11-6 | Codex | Runtime hardening: Dockerfile non-root, file permissions | 🔲 Blocked on I11-0 |
+| I11-7 | Codex | Supply chain: pip-audit, trivy, multi-stage Docker | 🔲 Blocked on I11-6 |
+| I11-8 | You | Architecture review | 🔲 Blocked on I11-5, I11-6, I11-7 |
+| I11-9 | Claude | Final cleanup + merge to main | 🔲 Blocked on I11-8 |
+
+---
+
+## Branching Model
+
+```
+main
+ └── feature/iteration-11
+      ├── feature/i11-0-pre-work
+      ├── feature/i11-1-hmac-auth
+      ├── feature/i11-2-nonce-store
+      ├── feature/i11-3-rate-limiter
+      ├── feature/i11-4-observability
+      ├── feature/i11-5-server-integration
+      ├── feature/i11-6-runtime-hardening
+      └── feature/i11-7-supply-chain
 ```
