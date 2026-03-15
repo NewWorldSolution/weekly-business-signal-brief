@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import threading
 import time
 
 HEADER_TIMESTAMP = "X-WBSB-Timestamp"
@@ -49,7 +50,13 @@ class NonceStore:
     In-memory nonce deduplication. TTL = 10 minutes. Max 10,000 entries (LRU eviction).
     Thread-safe via threading.Lock.
     Does not survive process restart — timestamp freshness window is the fallback.
+    On restart, verify_timestamp() provides the only replay protection for the
+    first 5 minutes until the TTL window catches up again.
     """
+
+    def __init__(self) -> None:
+        self._store: dict[str, float] = {}
+        self._lock = threading.Lock()
 
     def check_and_record(self, nonce: str) -> bool:
         """
@@ -57,4 +64,18 @@ class NonceStore:
         Returns False if nonce was seen within TTL window (replay — reject).
         Side effect: records the nonce if new.
         """
-        raise NotImplementedError
+        with self._lock:
+            now = time.time()
+            expired = [key for key, expiry in self._store.items() if expiry < now]
+            for key in expired:
+                del self._store[key]
+
+            if nonce in self._store:
+                return False
+
+            if len(self._store) >= 10_000:
+                oldest_key = min(self._store, key=lambda key: self._store[key])
+                del self._store[oldest_key]
+
+            self._store[nonce] = now + 600
+            return True

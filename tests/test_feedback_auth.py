@@ -2,11 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import sys
+import threading
+from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
+
 import wbsb.feedback.auth as auth_mod
-from wbsb.feedback.auth import verify_hmac, verify_timestamp
+from wbsb.feedback.auth import NonceStore, verify_hmac, verify_timestamp
 
 
 def _sign(body: bytes, timestamp: str, secret: str) -> str:
@@ -102,3 +108,66 @@ def test_verify_timestamp_future(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_verify_timestamp_non_integer() -> None:
     assert verify_timestamp("abc") is False
+
+
+def test_nonce_store_new_nonce() -> None:
+    store = NonceStore()
+
+    assert store.check_and_record("nonce-1") is True
+
+
+def test_nonce_store_replay() -> None:
+    store = NonceStore()
+
+    assert store.check_and_record("nonce-1") is True
+    assert store.check_and_record("nonce-1") is False
+
+
+def test_nonce_store_expiry() -> None:
+    store = NonceStore()
+
+    with patch.object(auth_mod.time, "time", return_value=1_710_000_000):
+        assert store.check_and_record("nonce-1") is True
+
+    with patch.object(auth_mod.time, "time", return_value=1_710_000_601):
+        assert store.check_and_record("nonce-1") is True
+
+
+def test_nonce_store_different_nonces() -> None:
+    store = NonceStore()
+
+    assert store.check_and_record("nonce-1") is True
+    assert store.check_and_record("nonce-2") is True
+
+
+def test_nonce_store_capacity_eviction() -> None:
+    store = NonceStore()
+
+    with patch.object(auth_mod.time, "time", return_value=20_000):
+        for i in range(10_001):
+            assert store.check_and_record(f"nonce-{i}") is True
+
+    assert len(store._store) == 10_000
+    assert "nonce-0" not in store._store
+    assert "nonce-1" in store._store
+    assert "nonce-10000" in store._store
+
+
+def test_nonce_store_thread_safety() -> None:
+    store = NonceStore()
+    results: list[bool] = []
+    result_lock = threading.Lock()
+
+    def _worker() -> None:
+        result = store.check_and_record("shared-nonce")
+        with result_lock:
+            results.append(result)
+
+    threads = [threading.Thread(target=_worker) for _ in range(10)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert results.count(True) == 1
+    assert results.count(False) == 9
