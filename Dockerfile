@@ -5,7 +5,7 @@ WORKDIR /build
 COPY pyproject.toml requirements.lock ./
 COPY src/ ./src/
 RUN pip install --no-cache-dir -r requirements.lock
-RUN pip install --no-cache-dir -e .
+RUN pip install --no-cache-dir .
 
 FROM python:3.11-slim AS production
 

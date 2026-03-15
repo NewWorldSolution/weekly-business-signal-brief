@@ -19,7 +19,7 @@ jobs:
       - name: Regenerate lockfile
         run: pip-compile pyproject.toml --output-file requirements.lock --strip-extras
       - name: Audit dependencies
-        run: pip-audit --requirement requirements.lock --fail-on HIGH
+        run: pip-audit --requirement requirements.lock
 
   trivy:
     runs-on: ubuntu-latest
