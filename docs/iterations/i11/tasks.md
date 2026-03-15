@@ -192,16 +192,16 @@ I11-3  [Codex]   Rate limiter (ratelimit.py)                                    
 I11-4  [Codex]   Security observability (observability/logging.py)                  → I11-0
 I11-5  [Claude]  Wire auth + nonce + rate limit + HTTPS into server.py + cli.py     → I11-2, I11-3, I11-4
 I11-6  [Codex]   Runtime hardening: Dockerfile non-root, file permissions           → I11-0
-I11-7  [Codex]   Supply chain: pin deps, pip-audit, trivy, multi-stage Docker       → I11-0
+I11-7  [Codex]   Supply chain: pin deps, pip-audit, trivy, multi-stage Docker       → I11-6
 I11-8  [You]     Architecture review                                                 → I11-5, I11-6, I11-7
 I11-9  [Claude]  Final cleanup + merge to main                                      → I11-8
 ```
 
 **Parallelism opportunities:**
-- After I11-0: I11-1, I11-3, I11-4, I11-6, I11-7 can all start in parallel (4 Codex worktrees simultaneously)
+- After I11-0: I11-1, I11-3, I11-4, I11-6 can all start in parallel (4 Codex worktrees simultaneously)
 - I11-2 starts after I11-1 (extends the same auth.py)
 - I11-5 starts only after I11-2, I11-3, and I11-4 all merge (wires all three together)
-- I11-6 and I11-7 are fully independent of auth/ratelimit — run in parallel with I11-1 through I11-4
+- I11-7 starts after I11-6 merges — both modify Dockerfile, sequential to avoid merge conflict
 - I11-8 starts only after I11-5, I11-6, and I11-7 all merge
 
 **Dependency diagram:**
@@ -210,8 +210,7 @@ I11-0
  ├── I11-1 → I11-2 ──┐
  ├── I11-3 ───────────┼──► I11-5 ──┐
  ├── I11-4 ───────────┘            ├──► I11-8 → I11-9
- ├── I11-6 ────────────────────────┤
- └── I11-7 ────────────────────────┘
+ └── I11-6 → I11-7 ────────────────┘
 ```
 
 ---
@@ -304,12 +303,13 @@ gh pr ready
 
 ### Why First
 
-All four parallel Codex tasks (I11-1, I11-3, I11-4, I11-6) need:
-1. The frozen contracts defined in empty scaffold files so imports resolve
-2. The `src/wbsb/observability/` package to exist before I11-4 creates `logging.py`
-3. Updated docs reflecting I11 as in-progress
+The three parallel Codex tasks (I11-1, I11-3, I11-4) need:
+1. The frozen contracts defined in stub files so imports resolve before implementation
+2. Updated docs reflecting I11 as in-progress
 
 Without this, Codex tasks will create their own inconsistent interfaces.
+
+**Note:** `src/wbsb/observability/` already exists and `logging.py` is in production use. Do not stub or replace it. I11-4 extends the existing file with new functions.
 
 ### What to Build
 
@@ -318,15 +318,13 @@ Without this, Codex tasks will create their own inconsistent interfaces.
 - `docs/project/TASKS.md` — add I11 as current active iteration with link to this file
 - `docs/deployment/security.md` — threat model summary (from I11 spec threat table); controls overview
 
-**Package scaffolding:**
+**Package scaffolding (new files only — do not touch existing observability module):**
 ```
 src/wbsb/feedback/auth.py            ← create with frozen interface stubs (raise NotImplementedError)
 src/wbsb/feedback/ratelimit.py       ← create with frozen interface stubs (raise NotImplementedError)
-src/wbsb/observability/__init__.py   ← create (empty package marker)
-src/wbsb/observability/logging.py    ← create with frozen interface stubs
 ```
 
-The stub files define the exact function signatures and class interfaces from the Frozen Contracts section above. Stubs raise `NotImplementedError` — they are replaced by I11-1 through I11-4. This ensures Codex tasks all implement the same interface.
+The stub files define the exact function signatures and class interfaces from the Frozen Contracts section above. Stubs raise `NotImplementedError` — they are replaced by I11-1 and I11-3. This ensures downstream tasks all implement the same interface.
 
 **`.env.example` update:**
 Add `WBSB_FEEDBACK_SECRET`, `WBSB_ENV`, and `WBSB_REQUIRE_HTTPS` to `.env.example`:
@@ -346,18 +344,16 @@ WBSB_REQUIRE_HTTPS=true
 ### Acceptance Criteria
 - All frozen interface stubs importable without error: `from wbsb.feedback.auth import verify_hmac, NonceStore`
 - `from wbsb.feedback.ratelimit import RateLimiter, RateLimitOutcome` imports cleanly
-- `from wbsb.observability.logging import log_security_event` imports cleanly
-- `.env.example` contains `WBSB_FEEDBACK_SECRET` and `WBSB_ENV`
+- `.env.example` contains `WBSB_FEEDBACK_SECRET`, `WBSB_ENV`, and `WBSB_REQUIRE_HTTPS`
 - `docs/deployment/security.md` exists with threat model table
 - All 391 existing tests pass; ruff clean
+- `src/wbsb/observability/logging.py` is unchanged from baseline
 
 ### Allowed Files
 ```
 src/wbsb/feedback/auth.py             ← create (stubs)
 src/wbsb/feedback/ratelimit.py        ← create (stubs)
-src/wbsb/observability/__init__.py    ← create (empty)
-src/wbsb/observability/logging.py     ← create (stubs)
-.env.example                          ← update (add 2 vars)
+.env.example                          ← update (add 3 vars)
 docs/project/project-iterations.md   ← update status
 docs/project/TASKS.md                 ← add I11 section
 docs/deployment/security.md          ← create
@@ -365,11 +361,12 @@ docs/deployment/security.md          ← create
 
 ### Files Not to Touch
 ```
-src/wbsb/feedback/server.py           ← I11-5 only
-src/wbsb/feedback/store.py            ← I11-6 only
-src/wbsb/cli.py                       ← I11-5 only
-Dockerfile                            ← I11-6 and I11-7 only
-pyproject.toml                        ← I11-7 only
+src/wbsb/observability/              ← already exists; I11-4 extends it, not I11-0
+src/wbsb/feedback/server.py          ← I11-5 only
+src/wbsb/feedback/store.py           ← I11-6 only
+src/wbsb/cli.py                      ← I11-5 only
+Dockerfile                           ← I11-6 and I11-7 only
+pyproject.toml                       ← I11-7 only
 Any test file
 ```
 
@@ -589,7 +586,16 @@ Bounded utility module. Interface fully specified. No pipeline or server changes
 
 ### What to Build
 
-Replace stubs in `src/wbsb/observability/logging.py`.
+**Extend** `src/wbsb/observability/logging.py` — the file already exists and is in production use. Do not replace or restructure it. Append the new security functions and event constants at the end of the file without modifying any existing code.
+
+#### Event constants (append to module level)
+```python
+EVENT_AUTH_FAILURE        = "auth_failure"
+EVENT_REPLAY_DETECTED     = "replay_detected"
+EVENT_RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
+EVENT_FEEDBACK_RECEIVED   = "feedback_received"
+EVENT_INVALID_INPUT       = "invalid_input"
+```
 
 #### `pseudonymize_ip(ip: str) -> str`
 - Split on `.` and `:` to detect IPv4 vs IPv6
@@ -598,7 +604,7 @@ Replace stubs in `src/wbsb/observability/logging.py`.
 - Return input unchanged if format not recognised (never raise)
 
 #### `log_security_event(event: str, **fields) -> None`
-- Use existing `get_logger()` from `wbsb.utils` (or equivalent StructLogger)
+- Use existing `get_logger()` from `wbsb.observability.logging` (already defined in this file)
 - Always emit at INFO level
 - Automatically add `timestamp` (ISO 8601) to every event
 - Never include in fields: `secret`, `signature`, `body`, `comment`, `nonce` (full value)
@@ -853,29 +859,35 @@ pyproject.toml                        ← I11-7 only
 
 **Owner:** Codex
 **Branch:** `feature/i11-7-supply-chain`
-**Depends on:** I11-0 merged (independent of I11-1 through I11-6)
+**Depends on:** I11-6 merged
 **Worktree:** `worktrees/i11-supply-chain`
+
+### Why After I11-6
+
+Both I11-6 and I11-7 modify `Dockerfile`. I11-6 adds the non-root user to the existing single-stage Dockerfile. I11-7 then converts that Dockerfile to multi-stage, preserving the non-root user from I11-6 in the production stage. Sequential ordering eliminates the merge conflict.
 
 ### Why Codex
 
-Mechanical changes: pin versions, generate lock file, update CI config, update Dockerfile to multi-stage. No logic changes.
+Mechanical changes: pin versions, generate lock file, update CI config, restructure Dockerfile to multi-stage. No logic changes.
 
 ### What to Build
 
-#### `pyproject.toml` — pin direct dependencies to exact versions
+#### `requirements.lock` — cross-platform dependency lockfile
 
-Change all `>=` specifiers to `==` for direct dependencies. Run `pip freeze` in the current venv to get exact versions. Example:
-```toml
-# Before
-dependencies = ["pandas>=2.0", "pydantic>=2.0"]
+Use `pip-tools` to generate a reproducible lockfile from `pyproject.toml`. Do not use `pip freeze` — it captures local-only packages, editable installs, and environment-specific state, which makes builds less reproducible across machines.
 
-# After
-dependencies = ["pandas==2.2.3", "pydantic==2.10.6"]
+```bash
+pip install pip-tools
+pip-compile pyproject.toml --output-file requirements.lock --strip-extras
 ```
 
-#### `requirements.lock`
+`pip-compile` resolves the full dependency graph from the abstract specifiers in `pyproject.toml` and pins every package (direct and transitive) to an exact version. The lockfile is platform-neutral and CI-safe. Commit `requirements.lock` to the repo.
 
-Generate via `pip-compile` (if available) or `pip freeze > requirements.lock`. This is the reproducible build anchor. Committed to repo.
+Add `pip-tools` to dev dependencies in `pyproject.toml` so CI can regenerate the lockfile.
+
+#### `pyproject.toml` — keep abstract specifiers for direct deps
+
+Do **not** change `>=` to `==` in `pyproject.toml`. Abstract specifiers in `pyproject.toml` allow `pip-compile` to resolve a consistent graph. Exact pinning belongs in `requirements.lock`, not in the package metadata. Pinning in `pyproject.toml` would break `pip install -e .` for anyone who installs the package in a different environment.
 
 #### `.github/workflows/security.yml` — new CI job
 
@@ -889,7 +901,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
-      - run: pip install pip-audit
+      - run: pip install pip-tools pip-audit
+      - run: pip-compile pyproject.toml --output-file requirements.lock --strip-extras
       - run: pip-audit --requirement requirements.lock --fail-on HIGH
 
   trivy:
@@ -942,11 +955,11 @@ cap_drop:
 
 ### Allowed Files
 ```
-pyproject.toml                        ← pin direct dependencies
-requirements.lock                     ← create (pip freeze output)
-Dockerfile                            ← multi-stage build
+requirements.lock                     ← create (pip-compile output)
+Dockerfile                            ← convert to multi-stage (preserve non-root user from I11-6)
 docker-compose.yml                    ← add cap_drop: ALL
 .github/workflows/security.yml        ← create
+pyproject.toml                        ← add pip-tools to dev dependencies only; do NOT change version specifiers
 ```
 
 ### Files Not to Touch
