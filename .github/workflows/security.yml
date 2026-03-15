@@ -1,0 +1,39 @@
+name: Security Scan
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  pip-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install pip-tools and pip-audit
+        run: pip install pip-tools pip-audit
+      - name: Regenerate lockfile
+        run: pip-compile pyproject.toml --output-file requirements.lock --strip-extras
+      - name: Audit dependencies
+        run: pip-audit --requirement requirements.lock --fail-on HIGH
+
+  trivy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          tags: wbsb:test
+          push: false
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: wbsb:test
+          severity: CRITICAL
+          exit-code: 1
+          format: table

@@ -1,6 +1,8 @@
 services:
   wbsb:
     build: .
+    cap_drop:
+      - ALL
     env_file:
       - path: .env          # developer local — never committed
         required: false     # valid in clean checkout; secrets injected by orchestrator

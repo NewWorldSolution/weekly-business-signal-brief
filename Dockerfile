@@ -1,18 +1,24 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS builder
+
+WORKDIR /build
+
+COPY pyproject.toml requirements.lock ./
+COPY src/ ./src/
+RUN pip install --no-cache-dir -r requirements.lock
+RUN pip install --no-cache-dir -e .
+
+FROM python:3.11-slim AS production
 
 WORKDIR /app
 
-# Copy package descriptor and source, then install
-# (editable install requires src/ to exist at install time)
-COPY pyproject.toml .
-COPY src/ src/
-RUN pip install --no-cache-dir -e .
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Config is runtime-only; copy after install so config changes don't bust the pip layer
-COPY config/ config/
+COPY src/ ./src/
+COPY config/ ./config/
 
 # Runtime directories populated via volume mounts — never baked in
-RUN mkdir -p runs data/incoming feedback
+RUN mkdir -p /app/runs /app/data/incoming /app/feedback
 
 # Secrets injected at runtime via --env-file or orchestrator env vars
 # Never COPY .env or set ENV for secrets here
