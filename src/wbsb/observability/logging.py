@@ -107,3 +107,43 @@ def init_run_logger(log_path: Path) -> logging.Logger:
 def get_logger() -> StructLogger:
     """Return the structured module logger."""
     return StructLogger(logging.getLogger("wbsb"))
+
+
+# Security event constants
+EVENT_AUTH_FAILURE = "auth_failure"
+EVENT_REPLAY_DETECTED = "replay_detected"
+EVENT_RATE_LIMIT_EXCEEDED = "rate_limit_exceeded"
+EVENT_FEEDBACK_RECEIVED = "feedback_received"
+EVENT_INVALID_INPUT = "invalid_input"
+
+
+def pseudonymize_ip(ip: str) -> str:
+    """Return a coarse-grained pseudonymized IP address."""
+    try:
+        if "." in ip and ":" not in ip:
+            parts = ip.split(".")
+            if len(parts) != 4:
+                return ip
+            parts[-1] = "0"
+            return ".".join(parts)
+        if ":" in ip:
+            parts = ip.split(":")
+            if len(parts) < 2:
+                return ip
+            parts[-1] = "0"
+            return ":".join(parts)
+        return ip
+    except Exception:
+        return ip
+
+
+def log_security_event(event: str, **fields: Any) -> None:
+    """Emit a structured security event and never raise."""
+    try:
+        get_logger().info(
+            event,
+            timestamp=datetime.utcnow().isoformat() + "Z",
+            **fields,
+        )
+    except Exception:
+        return None
