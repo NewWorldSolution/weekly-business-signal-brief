@@ -17,4 +17,9 @@ RUN mkdir -p runs data/incoming feedback
 # Secrets injected at runtime via --env-file or orchestrator env vars
 # Never COPY .env or set ENV for secrets here
 
+# Run as non-root user (I11-6)
+RUN groupadd -r wbsb && useradd -r -g wbsb -u 1000 wbsb
+RUN chown -R wbsb:wbsb /app
+USER wbsb
+
 CMD ["wbsb", "--help"]
