@@ -4,10 +4,10 @@ import logging
 import threading
 import time
 from collections import defaultdict, deque
-from enum import StrEnum
+from enum import Enum
 
 
-class RateLimitOutcome(StrEnum):
+class RateLimitOutcome(str, Enum):  # noqa: UP042 - matches the frozen I11 contract
     allowed = "allowed"
     per_ip_exceeded = "per_ip_exceeded"  # HTTP 429
     global_exceeded = "global_exceeded"  # HTTP 503
@@ -26,6 +26,7 @@ class RateLimiter:
     _PER_IP_BURST = 3
     _GLOBAL_LIMIT = 100
     _WINDOW = 60.0
+    _EVICTION_WINDOW = 120.0
 
     def __init__(self) -> None:
         self._ip_windows: dict[str, deque[float]] = defaultdict(deque)
@@ -44,7 +45,7 @@ class RateLimiter:
                 if len(self._global_window) >= self._GLOBAL_LIMIT:
                     return RateLimitOutcome.global_exceeded
 
-                self._purge_stale_ips(cutoff)
+                self._purge_stale_ips(now - self._EVICTION_WINDOW)
                 ip_window = self._ip_windows[source_ip]
                 self._purge_window(ip_window, cutoff)
                 if len(ip_window) >= self._PER_IP_LIMIT + self._PER_IP_BURST:

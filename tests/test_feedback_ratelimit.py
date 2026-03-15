@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import sys
 from collections import deque
+from pathlib import Path
 from unittest.mock import patch
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from wbsb.feedback.ratelimit import RateLimiter, RateLimitOutcome
 
@@ -71,7 +75,7 @@ def test_rate_limiter_evicts_empty_ip_windows() -> None:
     limiter = RateLimiter()
     limiter._ip_windows["10.0.0.1"] = deque([1.0])
 
-    with patch("wbsb.feedback.ratelimit.time.time", return_value=100.0):
+    with patch("wbsb.feedback.ratelimit.time.time", return_value=130.0):
         assert limiter.check("10.0.0.2") == RateLimitOutcome.allowed
 
     assert "10.0.0.1" not in limiter._ip_windows
