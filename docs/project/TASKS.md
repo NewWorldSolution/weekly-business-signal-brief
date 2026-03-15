@@ -33,6 +33,8 @@ Full roadmap with all planned iterations: see `project-iterations.md`.
 | **I6** | **Historical Memory & Trend Awareness** | **✅ Complete** |
 | **I7** | **Evaluation Framework & Feedback Loop** | **✅ Complete** |
 | **I9** | **Deployment & Delivery** | **✅ Complete** |
+| I11 | Security Hardening & Production Readiness | 🔲 Next |
+| I12 | Server Deployment & Production Operations | 🔲 Planned |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned |
 | I10 | Multi-File Data Consolidation | 🔲 Planned |
 

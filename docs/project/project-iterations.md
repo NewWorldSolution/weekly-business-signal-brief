@@ -2,7 +2,7 @@
 ## Weekly Business Signal Brief — Full Roadmap
 
 **MVP Definition:** Iterations I1–I7 + I9 complete. **MVP is now complete.**
-**Post-MVP execution order:** I11 (security hardening) → I8 (dashboard polish) → I10 (multi-file data consolidation). I11 runs first to secure the feedback endpoint before any shared deployment.
+**Post-MVP execution order:** I11 (security hardening) → I12 (server deployment) → I8 (dashboard polish) → I10 (multi-file data consolidation). I11 runs first to secure the feedback endpoint before any shared deployment. I12 deploys to a real server and establishes the operational stack reused by future projects.
 
 ---
 
@@ -19,6 +19,7 @@
 | I7 | Evaluation Framework & Feedback Loop | ✅ Complete | ✅ |
 | I9 | Deployment & Delivery | ✅ Complete | ✅ |
 | I11 | Security Hardening & Production Readiness | 🔲 Next | — |
+| I12 | Server Deployment & Production Operations | 🔲 Planned | — |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned | — |
 | I10 | Multi-File Data Consolidation | 🔲 Planned | — |
 
@@ -928,6 +929,285 @@ WBSB can be deployed to a shared or hosted environment with:
 - a written threat model, controls summary, and deployment security guide
 
 At the end of I11, WBSB's security posture rests on deliberate, testable controls — not perimeter assumptions.
+
+---
+
+## Iteration 12 — Server Deployment & Production Operations
+**Status:** 🔲 Planned | **Post-MVP**
+**Prerequisites:** I11 (Security Hardening) must be complete before deploying to any server reachable from outside localhost.
+
+### Goal
+Deploy WBSB to a real Linux server so it runs autonomously: the scheduler fires on schedule, reports are delivered to Teams/Slack without manual intervention, and the feedback endpoint is reachable over HTTPS. This iteration also establishes the operational knowledge and server stack that will be reused for future projects (cash flow bot and others).
+
+### Why This Is Needed
+After I9 and I11, WBSB is fully packaged and secured. But it still requires a developer to start it manually on a local machine. I12 makes it run autonomously on a real server, establishes operational discipline (deployment workflow, secrets management, health checks), and gives the operator direct experience with Linux server management — a transferable skill across all future projects.
+
+---
+
+### Task Overview
+
+| Task | Owner | Description |
+|---|---|---|
+| I12-0 | Claude | Docs update, deployment target decision, `docs/deployment/` structure |
+| I12-1 | You | VPS provisioning + initial server setup (runbook only, no code) |
+| I12-2 | Codex | `docker-compose.prod.yml` — restart policies, named volumes, data bind mount, health checks |
+| I12-3 | Codex | `Caddyfile` + TLS docs (`docs/deployment/tls.md`) |
+| I12-4 | Claude | `Makefile` with all standard targets; backup implementation; smoke test script |
+| I12-5 | Codex | `GET /health` endpoint in `src/wbsb/feedback/server.py` |
+| I12-6 | Claude | Scheduler production config + `docs/deployment/scheduler.md` |
+| I12-7 | Claude | `docs/deployment/env-management.md` + `docs/deployment/operations.md` |
+| I12-8 | You | Architecture review |
+| I12-9 | Claude | Final cleanup + merge to main |
+
+---
+
+### Branching Model
+
+```
+main
+ └── feature/iteration-12                    ← integration branch
+      ├── feature/i12-0-pre-work             ← docs structure + deployment decision
+      ├── feature/i12-2-prod-compose         ← docker-compose.prod.yml
+      ├── feature/i12-3-caddy-tls            ← Caddyfile + tls.md
+      ├── feature/i12-4-makefile             ← Makefile + smoke_test.sh
+      ├── feature/i12-5-health-endpoint      ← GET /health
+      ├── feature/i12-6-scheduler            ← scheduler config + docs
+      └── feature/i12-7-runbooks             ← env-management.md + operations.md
+```
+
+`feature/iteration-12` → `main` via single PR after I12-8 architecture review passes.
+
+---
+
+### Deployment Target Decision
+
+I12 supports two deployment paths. Choose one before starting. The tasks below are written for **Path A (VPS)**. Path B differences are noted per task.
+
+| | Path A — VPS (Hetzner/DigitalOcean) | Path B — Azure Container Apps |
+|---|---|---|
+| **Cost** | €4–$6/month | $0–5/month (free tier likely sufficient) |
+| **Learning value** | High — Linux, Docker, SSH, cron, firewall | High — Azure CLI, container registry, managed infra |
+| **Complexity** | You manage the OS and Docker | Azure manages the OS; you manage the app |
+| **TLS** | Caddy handles automatically | Azure handles automatically |
+| **Scheduler** | Host cron | Azure Container Apps Jobs (scheduled) |
+| **Teams integration** | Natural (outbound HTTP) | Natural (outbound HTTP) |
+| **Portfolio signal** | DevOps fundamentals | Enterprise cloud (relevant for Polish market) |
+| **Recommended if** | You want to understand how servers work | You want to leverage existing M365 subscription |
+
+Both paths produce the same end result. Path B is documented as an alternative in `docs/deployment/azure.md`. The runbook tasks below follow Path A; Path B equivalents are noted where they diverge significantly.
+
+---
+
+### What to Build
+
+#### 12.1 — Server Provisioning and Initial Setup
+
+**Path A — VPS:**
+
+Recommended providers:
+
+| Provider | Spec | Cost | Notes |
+|---|---|---|---|
+| **Hetzner CX22** | 2 vCPU, 4 GB RAM | ~€4/month | Best value, Helsinki or Warsaw DC |
+| DigitalOcean Droplet | 1 vCPU, 1 GB RAM | $6/month | More documentation available |
+
+**Server setup steps (all documented in `docs/deployment/server-setup.md`):**
+- Provision Ubuntu 24.04 LTS
+- Install Docker and Docker Compose
+- Create non-root deploy user (`wbsb`) with sudo
+- SSH key authentication only — password auth disabled
+- UFW firewall: ports 22 (SSH), 80 (HTTP), 443 (HTTPS) allowed; all others denied
+- System timezone set to match business location
+- Clone the repo: `git clone <repo> /opt/wbsb` — required for `make deploy` (git pull model)
+- Create `/opt/wbsb/data/` for weekly input files
+
+**Path B — Azure Container Apps:**
+- Create Azure free account
+- Install Azure CLI
+- Create Container Apps environment via `az containerapp env create`
+- Push Docker image to Azure Container Registry
+- Documented in `docs/deployment/azure.md`; Makefile targets adapted accordingly
+
+No code changes in either path.
+
+#### 12.2 — Production Docker Compose Configuration
+
+Create `docker-compose.prod.yml` separate from the development compose file.
+
+Production-specific differences from the dev compose:
+- `restart: unless-stopped` on all services — containers restart after server reboot
+- Environment variables sourced from `.env` file on server (not committed to repo)
+- Named Docker volumes for `runs/`, `feedback/`, `logs/` — data survives container recreation
+- A `data` bind mount mapping `/opt/wbsb/data` on the host to `/data` in the pipeline container — this is the production input-ingest path where the operator drops weekly source files
+- No development bind mounts (`./src:/app/src` etc.) in production
+- Health check defined for the feedback server container
+- Resource limits: `mem_limit: 512m` on pipeline container; `mem_limit: 128m` on feedback server
+
+#### 12.3 — Reverse Proxy with TLS (Caddy)
+
+Caddy is recommended over nginx for first-time server operators: automatic Let's Encrypt certificate management with zero manual renewal.
+
+**Pre-condition:** The operator must purchase a domain and point a DNS A record to the server IP before Caddy can obtain a Let's Encrypt certificate. DNS propagation (typically 5–60 minutes) must complete before the TLS acceptance criteria can be evaluated. Domain purchase and DNS configuration are operator responsibilities, but they are a required pre-condition for this task — not optional.
+
+**Deliverables:**
+- `Caddyfile` committed to repo with placeholder domain (`feedback.yourdomain.com`)
+- TLS configuration documented in `docs/deployment/tls.md` (referenced in I11), including DNS pre-condition and A record setup
+- Caddy runs as a separate container in the compose stack
+- WBSB feedback server is not exposed directly — all inbound traffic goes through Caddy
+
+**Config pattern:**
+```
+feedback.yourdomain.com {
+    reverse_proxy feedback-server:8000
+}
+```
+
+**Why Caddy over nginx:** Caddy handles Let's Encrypt certificate issuance and renewal automatically. Nginx requires manual `certbot` setup and cron jobs. For a single-server deployment operated by one person, Caddy reduces operational overhead significantly.
+
+#### 12.4 — Environment and Secrets Management on Server
+
+Establish a consistent, safe pattern for managing secrets on the server.
+
+**Requirements:**
+- `.env` file on server at `/opt/wbsb/.env`, owned by deploy user, permissions `0o600`
+- Documented process for adding or rotating a secret (edit `.env`, restart affected container)
+- Rotation of any single secret requires only one command: `make restart-feedback` or equivalent
+- Never `git pull` secrets — they live only on the server, never in the repo
+
+**Deliverable:** `docs/deployment/env-management.md` — covers initial setup, rotation procedure, and what to do if a secret is compromised.
+
+#### 12.5 — Deployment Workflow (Makefile)
+
+A `Makefile` with standard targets that wrap Docker Compose commands. Reduces operator error by making all common operations one-liners.
+
+```makefile
+deploy:       ## git pull + docker compose up --build -d (brief restart, typically <30s)
+logs:         ## Tail logs from all containers
+status:       ## Show container health, uptime; reads last entry from runs/index.json
+restart:      ## Restart all containers
+backup:       ## Archive runs/, feedback/, and data/ to dated tarball in /opt/wbsb/backups/
+smoke-test:   ## Send HMAC-signed POST /feedback and assert HTTP 200 (requires WBSB_FEEDBACK_SECRET in env)
+```
+
+**Deployment model:** `make deploy` runs `git pull` on the server (repo cloned at `/opt/wbsb` in 12.1) then `docker compose up --build -d`. Containers are rebuilt from the updated source and recreated. There is a brief interruption (<30 seconds typically) while the feedback server restarts. This is acceptable for a low-traffic internal tool. Zero-downtime blue-green deployment is documented as an upgrade path, not implemented in I12.
+
+**Backup implementation note:** Named Docker volume backup uses `docker run --rm -v wbsb_runs:/runs -v /opt/wbsb/backups:/backup alpine tar czf /backup/wbsb-$(date +%Y%m%d).tar.gz /runs /feedback /data`. This pattern is documented in the Makefile comments.
+
+**`smoke_test.sh` note:** The script reads `WBSB_FEEDBACK_SECRET` from the environment (sourced from `.env` before running). Never hardcode the secret in the script.
+
+#### 12.6 — Health Check Endpoint
+
+Add a minimal `GET /health` route to the feedback server.
+
+**Response:** `{"status": "ok", "timestamp": "<ISO8601>"}` — HTTP 200 always (no auth required).
+
+Used by:
+- Docker health check in `docker-compose.prod.yml`
+- Caddy upstream health probing
+- `make smoke-test` script
+- Any external uptime monitor (UptimeRobot free tier is sufficient)
+
+**Allowed files:** `src/wbsb/feedback/server.py`
+
+#### 12.7 — Scheduler Production Configuration
+
+Configure `wbsb run --auto` to run on a production schedule.
+
+Two options (both documented; implement whichever fits the chosen hosting):
+
+**Production input-ingest path:** Weekly source files are placed by the operator into `/opt/wbsb/data/` on the server. This directory is bind-mounted to `/data` inside the pipeline container (defined in 12.2). The operator (or assistant) transfers the file to the server via SCP (`scp weekly_data.csv wbsb@server:/opt/wbsb/data/`) or SFTP. This step is documented in `docs/deployment/scheduler.md` and in the operations runbook (12.8). The scheduler then picks up the latest unprocessed file automatically.
+
+**Option A — Host cron (recommended for VPS):**
+```cron
+0 6 * * 1 docker compose -f /opt/wbsb/docker-compose.prod.yml run --rm pipeline wbsb run --auto --watch-dir /data
+```
+
+**Option B — Docker restart-on-completion pattern:**
+A separate `pipeline` service in `docker-compose.prod.yml` that runs, exits, and is restarted by a cron-based Docker trigger.
+
+**No-file behaviour:** If no new file is present in `/data` when the scheduler fires, `wbsb run --auto` exits gracefully with no run artifact (I9 behaviour). This is expected every week until the operator uploads the file. The operations runbook documents: "if no report arrives by 7am Monday, check that the data file was uploaded to `/opt/wbsb/data/` before 6am."
+
+**Deliverable:** `docs/deployment/scheduler.md` — production schedule configuration, input file transfer procedure, how to verify a run fired, how to manually trigger a run, what to do if no file was present.
+
+#### 12.8 — Basic Operational Runbook
+
+Document how to operate the system day-to-day without a developer present. Intended audience: the business owner or a non-technical assistant.
+
+**Contents of `docs/deployment/operations.md`:**
+- How to tell if the Monday report ran successfully
+- How to re-trigger a run manually
+- What to do if the report was not delivered
+- How to check container logs
+- How to rotate an API key or webhook URL
+- How to restore from backup
+
+**`scripts/smoke_test.sh`:** A shell script that sends a valid HMAC-signed `POST /feedback` request and asserts HTTP 200. Run after every deployment to confirm the system is operational.
+
+---
+
+### Acceptance Criteria
+
+**Deployment:**
+- `docker compose -f docker-compose.prod.yml up -d` starts all services on a fresh VPS from the documented setup runbook
+- All containers show `healthy` status after startup
+
+**TLS and network** *(evaluated after DNS A record is pointed to the server IP):*
+- `https://feedback.yourdomain.com/health` returns `{"status": "ok"}` with a valid Let's Encrypt certificate
+- `http://` request redirects to `https://` (Caddy default behaviour)
+- `POST /feedback` with `X-Forwarded-Proto: http` returns HTTP 400 (I11 requirement verified in production)
+- If DNS is not yet configured, TLS acceptance is deferred; all other criteria must still pass using the server IP directly on HTTP (Caddy self-signed or HTTP-only mode for local validation)
+
+**Scheduler:**
+- Scheduler fires at configured time; run artifact written to named volume without manual intervention
+- Delivery dispatched to Teams or Slack within 5 minutes of pipeline completion
+- `make status` shows timestamp of last successful run
+
+**Security (verify I11 controls are active in production):**
+- `POST /feedback` without valid HMAC returns HTTP 401
+- `POST /feedback` with valid HMAC and fresh nonce returns HTTP 200 over HTTPS
+- `docker inspect` confirms containers run as UID 1000 (non-root)
+- No secrets appear in `docker history --no-trunc wbsb` output
+
+**Operations:**
+- `make deploy` completes without manual steps; containers restart cleanly
+- `make backup` produces a dated archive of `runs/` and `feedback/` volumes
+- `make smoke-test` passes end-to-end after a clean deploy
+- `docs/deployment/` contains: `server-setup.md`, `tls.md`, `env-management.md`, `scheduler.md`, `operations.md`
+
+**Regression:**
+- All existing tests pass locally; ruff clean
+- `wbsb eval` golden cases all pass
+
+---
+
+### Suggested Files
+```text
+docker-compose.prod.yml                ← production compose (new)
+Caddyfile                              ← reverse proxy config (new)
+Makefile                               ← operational commands (new or extended)
+scripts/smoke_test.sh                  ← deployment smoke test (new)
+src/wbsb/feedback/server.py            ← add GET /health route
+docs/deployment/server-setup.md        ← VPS provisioning runbook (new)
+docs/deployment/azure.md               ← Azure Container Apps alternative path (new)
+docs/deployment/tls.md                 ← TLS setup guide (new; referenced by I11)
+docs/deployment/env-management.md      ← secrets management guide (new)
+docs/deployment/scheduler.md           ← scheduler production config + input ingest (new)
+docs/deployment/operations.md          ← day-to-day operations runbook (new)
+```
+
+### Out of Scope
+- Multi-server or high-availability deployment
+- CI/CD pipeline that auto-deploys on push to main (documented as upgrade path)
+- External monitoring services (Grafana, Datadog) — documented as upgrade path
+- Database migration (WBSB uses file-based storage; no database setup required in I12)
+- Custom domain purchase and DNS A record configuration — operator pre-condition (must be done before TLS acceptance is evaluated; not a deliverable of this iteration)
+
+### Definition of Done
+WBSB runs autonomously on a real Linux server with:
+- weekly reports triggered and delivered without any manual action
+- feedback endpoint reachable over HTTPS with I11 security controls active
+- deployment, secrets rotation, and basic troubleshooting achievable by following the documented runbooks
+- the server stack documented clearly enough to reuse for the next project
 
 ---
 
