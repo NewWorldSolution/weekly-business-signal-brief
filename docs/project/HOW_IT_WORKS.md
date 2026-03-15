@@ -271,14 +271,17 @@ wbsb run --auto --watch-dir data/incoming --deliver
 
 The `--auto` mode reads scheduler defaults from `config/delivery.yaml` (watch directory, filename pattern). It skips files already recorded in the run history index. Use `wbsb deliver --run-id` to re-deliver any past run without re-running the pipeline.
 
-### Feedback Webhook Server (I9)
+### Feedback Webhook Server (I9 / I11)
 
 ```bash
 # Start the feedback webhook server (POST /feedback)
-wbsb feedback serve --host 0.0.0.0 --port 8080
+# Requires WBSB_FEEDBACK_SECRET in production
+WBSB_FEEDBACK_SECRET=<secret> wbsb feedback serve --host 0.0.0.0 --port 8080
 ```
 
-Teams and Slack report cards include action buttons that POST feedback to this endpoint. Feedback is stored in `feedback/` (gitignored) and queryable via the feedback CLI.
+Teams and Slack report cards include action buttons that POST feedback to this endpoint. In production, all requests are authenticated via HMAC-SHA256. Feedback is stored in `feedback/` (gitignored) and queryable via the feedback CLI.
+
+See the [Security Controls](#security-controls-i11) section below for the full authentication model.
 
 ### Evaluation and Feedback Commands (I7)
 
@@ -476,9 +479,13 @@ weekly-business-signal-brief/
 │   │   ├── auto.py               # File discovery, history check, size guard
 │   │   └── watcher.py            # Path traversal guard
 │   ├── feedback/
-│   │   ├── server.py             # POST /feedback HTTP webhook server
+│   │   ├── server.py             # POST /feedback HTTP webhook server (HMAC auth, rate limiting)
+│   │   ├── auth.py               # HMAC verification, timestamp freshness, nonce replay store
+│   │   ├── ratelimit.py          # Per-IP + global circuit breaker rate limiter
 │   │   ├── store.py              # save/list/summarize/export feedback
 │   │   └── models.py             # FeedbackEntry, VALID_SECTIONS, VALID_LABELS
+│   ├── observability/
+│   │   └── logging.py            # log_security_event(), pseudonymize_ip(), structured events
 │   ├── domain/models.py          # Pydantic domain models
 │   ├── pipeline.py               # Pipeline orchestrator
 │   └── cli.py                    # Typer CLI
@@ -491,12 +498,55 @@ weekly-business-signal-brief/
 ├── Dockerfile                    # Production container
 ├── docker-compose.yml            # Local development / compose setup
 ├── .env.example                  # All required environment variables documented
-├── tests/                        # pytest test suite (391 tests)
+├── tests/                        # pytest test suite (443 tests)
 ├── docs/project/project-iterations.md   # Full roadmap
 └── docs/project/HOW_IT_WORKS.md         # This file
 ```
 
 ---
 
-*System state as of Iteration 9 — March 2026. MVP complete.*
-*391 tests passing. Ruff clean. All thresholds configurable via `config/rules.yaml`.*
+## Security Controls (I11)
+
+The feedback webhook (`POST /feedback`) is hardened for shared or hosted use. All inbound requests pass through a layered security stack before any data is read or written.
+
+### Request Handling Order
+
+| Step | Control | Bypass |
+|---|---|---|
+| 0 | X-Forwarded-Proto check (`WBSB_REQUIRE_HTTPS=true`) | — |
+| 1 | Per-IP rate limit (10 req/60 s) + global circuit breaker (100 req/60 s) | — |
+| 2 | Auth header presence + UUID4 nonce format check | Dev mode |
+| 3 | Timestamp freshness (±300 s) | Dev mode |
+| 4 | HMAC-SHA256 verification | Dev mode |
+| 5 | Nonce replay check (10,000-entry store, TTL-expiring) | Dev mode |
+| 6 | Body validation (run_id regex, section/label allowlists) | — |
+| 7 | Feedback storage (UUID-only file path) | — |
+
+**Dev bypass:** `WBSB_ENV=development` skips steps 2–5. Rate limiting always applies.
+
+### Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `WBSB_FEEDBACK_SECRET` | Yes (production) | Shared HMAC secret. Server exits 1 on startup if unset in production. |
+| `WBSB_ENV` | No | Set to `development` to skip HMAC auth. Default: `production`. |
+| `WBSB_REQUIRE_HTTPS` | No | Set to `true` to reject plaintext HTTP (`X-Forwarded-Proto: http`). |
+
+### Safe-Write Guarantees
+
+- Output file path is always `feedback/{uuid4}.json` — never derived from user-controlled input
+- Comment content is never written to logs
+- `run_id`, `section`, and `label` are validated against strict allowlists before any disk write
+- Request bodies exceeding 4096 bytes are rejected before reading any content
+- Error responses never include stack traces, exception messages, file paths, or Python version strings
+
+### Security Observability
+
+Every rejection point emits a structured JSON security event via `log_security_event()`. IP addresses are one-way hashed with SHA-256 (`pseudonymize_ip()`) — raw IPs are never logged.
+
+Event names: `auth_failure`, `rate_limit_exceeded`, `replay_detected`, `feedback_received`, `invalid_input`.
+
+---
+
+*System state as of Iteration 11 — March 2026. MVP complete. Security hardened.*
+*443 tests passing. Ruff clean. All thresholds configurable via `config/rules.yaml`.*

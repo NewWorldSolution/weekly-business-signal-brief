@@ -18,7 +18,7 @@
 | I6 | Historical Memory & Trend Awareness | ✅ Complete | ✅ |
 | I7 | Evaluation Framework & Feedback Loop | ✅ Complete | ✅ |
 | I9 | Deployment & Delivery | ✅ Complete | ✅ |
-| I11 | Security Hardening & Production Readiness | 🔲 In Progress | — |
+| I11 | Security Hardening & Production Readiness | ✅ Complete | — |
 | I12 | Server Deployment & Production Operations | 🔲 Planned | — |
 | I8 | Dashboard & Visual Reporting | 🔲 Planned | — |
 | I10 | Multi-File Data Consolidation | 🔲 Planned | — |
@@ -669,7 +669,7 @@ wbsb run \
 ---
 
 ## Iteration 11 — Security Hardening & Production Readiness
-**Status:** 🔲 Planned | **Post-MVP**
+**Status:** ✅ Complete | **Post-MVP**
 
 ### Goal
 Move WBSB from "deployable MVP" to "defensible for shared or hosted use." I9 introduces the first inbound HTTP surface (`POST /feedback`) and outbound delivery credentials (Slack/Teams webhooks). That is sufficient for an internal MVP but not for any deployment reachable by untrusted parties. I11 adds deliberate security controls across authentication, transport security, abuse prevention, secrets lifecycle, runtime hardening, supply chain, and observability.
