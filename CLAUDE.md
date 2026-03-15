@@ -182,3 +182,14 @@ This prevents the situation where a branch is merged into the integration branch
 
 - `docs/project/TASKS.md` defines the current iteration tasks and allowed-file boundaries.
 - CLAUDE.md defines permanent architecture and working rules.
+
+## Parallel Execution & PR Merge Workflow
+
+When the user asks to "move to the next step" or "merge and continue", always:
+
+1. **Identify the next parallel-eligible tasks** from the current iteration's dependency diagram (in `docs/iterations/iN/tasks.md`), not just the next sequential task number.
+2. **State which tasks can now start in parallel** — e.g. after I11-0 merges, I11-1 + I11-3 + I11-4 + I11-6 can all start simultaneously.
+3. **Perform the merge into the integration branch** (`feature/iteration-N`) before stating what is next.
+4. **Trigger rebase warnings** for any downstream task branch that was cut before the merged task and now needs `git rebase origin/feature/iteration-N`.
+
+The dependency diagram for each iteration is the authoritative source. Do not default to sequential task order when parallel execution is possible.
