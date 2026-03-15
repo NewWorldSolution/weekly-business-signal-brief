@@ -67,7 +67,7 @@ All downstream tasks import from these contracts. If a contract needs to change 
 ```python
 HEADER_TIMESTAMP  = "X-WBSB-Timestamp"   # Unix timestamp, seconds, integer string
 HEADER_SIGNATURE  = "X-WBSB-Signature"   # HMAC-SHA256 hex digest (lowercase)
-HEADER_NONCE      = "X-WBSB-Nonce"       # UUID4 string
+HEADER_NONCE      = "X-WBSB-Nonce"       # UUID4 string; absent or non-UUID4 → 401
 ```
 
 ### HMAC Signing String
@@ -674,13 +674,19 @@ This task wires four independently built modules (auth, nonce, rate limiter, obs
 Request handling order for `POST /feedback`:
 ```
 1. Rate limit check          → 429 (per-IP) or 503 (global) if exceeded
-2. Parse headers             → 400 if X-WBSB-Timestamp or X-WBSB-Signature absent
+2. Parse auth headers        → 401 if X-WBSB-Timestamp, X-WBSB-Signature, or X-WBSB-Nonce absent
+                               → 401 if X-WBSB-Nonce is present but not a valid UUID4 format
 3. Timestamp freshness       → 401 if expired or malformed
 4. HMAC verification         → 401 if invalid
-5. Nonce check               → 409 if replay detected
+5. Nonce replay check        → 409 if nonce already seen within TTL window
 6. Existing body validation  → 400 (unchanged from I9)
 7. Feedback storage          → 200 (unchanged from I9)
 ```
+
+**HTTP status code rationale:**
+- HTTP 401 for all missing or invalid authentication material (headers 2–4) — standard semantics for unauthenticated requests
+- HTTP 409 for replay (step 5) — the request is authenticated but conflicts with a prior request; 401 would be misleading since the credentials are valid
+- HTTP 400 reserved for malformed request body (step 6) and `X-Forwarded-Proto` violation (step 0)
 
 **Dev bypass:** If `WBSB_ENV=development`, steps 2–5 are skipped. This requires explicit opt-in — default `WBSB_ENV=production`.
 
@@ -716,12 +722,18 @@ In the `wbsb feedback serve` command, before starting the server:
 ### Tests Required (`tests/test_feedback_server.py` — extend existing)
 
 ```python
-# Auth rejection tests
+# Auth rejection tests — missing headers (all → 401)
 test_post_feedback_missing_signature          # no X-WBSB-Signature → 401
 test_post_feedback_missing_timestamp          # no X-WBSB-Timestamp → 401
+test_post_feedback_missing_nonce              # no X-WBSB-Nonce → 401
+test_post_feedback_malformed_nonce            # X-WBSB-Nonce is not UUID4 format → 401
+
+# Auth rejection tests — invalid values (all → 401)
 test_post_feedback_invalid_hmac               # wrong signature → 401
 test_post_feedback_expired_timestamp          # >300s ago → 401
-test_post_feedback_replay_nonce               # same nonce twice → 409
+
+# Replay
+test_post_feedback_replay_nonce               # valid nonce used twice → 409 (not 401)
 
 # Rate limit tests
 test_post_feedback_per_ip_rate_limit          # 14th request → 429 + Retry-After header
@@ -983,10 +995,13 @@ config/rules.yaml
 
 **Authentication:**
 - [ ] `POST /feedback` with missing `X-WBSB-Signature` returns HTTP 401
+- [ ] `POST /feedback` with missing `X-WBSB-Timestamp` returns HTTP 401
+- [ ] `POST /feedback` with missing `X-WBSB-Nonce` returns HTTP 401
+- [ ] `POST /feedback` with malformed `X-WBSB-Nonce` (not UUID4) returns HTTP 401
 - [ ] `POST /feedback` with invalid HMAC returns HTTP 401
 - [ ] `POST /feedback` with expired timestamp (>300s) returns HTTP 401
-- [ ] `POST /feedback` with replayed nonce returns HTTP 409
-- [ ] `POST /feedback` with valid HMAC and fresh nonce returns HTTP 200
+- [ ] `POST /feedback` with replayed nonce returns HTTP 409 (not 401)
+- [ ] `POST /feedback` with valid HMAC, fresh timestamp, and fresh nonce returns HTTP 200
 
 **Transport:**
 - [ ] `X-Forwarded-Proto: http` request rejected with HTTP 400 when `WBSB_REQUIRE_HTTPS=true`
