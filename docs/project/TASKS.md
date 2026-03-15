@@ -317,7 +317,7 @@ main
 
 **Security Observability (I11-4)**
 - [x] `log_security_event()` emits structured JSON with `event`, `source_ip`, and context kwargs
-- [x] `pseudonymize_ip()` hashes IPs with one-way SHA-256 — never logs raw IPs
+- [x] `pseudonymize_ip()` coarsely masks IPs (zeroes last IPv4 octet / last IPv6 group) — never logs raw IPs
 - [x] Named event constants: `EVENT_AUTH_FAILURE`, `EVENT_RATE_LIMIT_EXCEEDED`, `EVENT_REPLAY_DETECTED`, `EVENT_FEEDBACK_RECEIVED`, `EVENT_INVALID_INPUT`
 
 **Server Integration (I11-5)**

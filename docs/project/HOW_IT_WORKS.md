@@ -542,7 +542,7 @@ The feedback webhook (`POST /feedback`) is hardened for shared or hosted use. Al
 
 ### Security Observability
 
-Every rejection point emits a structured JSON security event via `log_security_event()`. IP addresses are one-way hashed with SHA-256 (`pseudonymize_ip()`) — raw IPs are never logged.
+Every rejection point emits a structured JSON security event via `log_security_event()`. IP addresses are coarsely masked by `pseudonymize_ip()` — the last IPv4 octet / last IPv6 group is zeroed — raw IPs are never logged.
 
 Event names: `auth_failure`, `rate_limit_exceeded`, `replay_detected`, `feedback_received`, `invalid_input`.
 
